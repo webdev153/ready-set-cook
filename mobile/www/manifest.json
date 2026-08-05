@@ -1,0 +1,14 @@
+{
+  "name": "Ready Set Cook!",
+  "short_name": "ReadySetCook",
+  "description": "Fast-paced cooking game — take orders, prep ingredients and serve dishes before time runs out!",
+  "start_url": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#241a12",
+  "theme_color": "#ef5b4c",
+  "icons": [
+    { "src": "assets/sorceress/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "assets/sorceress/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

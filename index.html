@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Ready Set Cook!</title>
+<meta name="theme-color" content="#ef5b4c">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="description" content="Ready Set Cook! — a fast-paced cooking game. Take orders, prep ingredients, serve dishes before time runs out!">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" href="assets/sorceress/icon-512.png">
+<link rel="apple-touch-icon" href="assets/sorceress/icon-512.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="wrap">
+  <div id="stage">
+    <canvas id="game" width="960" height="640"></canvas>
+
+    <div id="overlays">
+      <!-- HOME -->
+      <div id="home" class="overlay show">
+        <img id="heroChef" src="assets/sorceress/ui/hero-chef.png" alt="" class="hero-chef" onerror="this.style.display='none'">
+        <div class="logo">
+          <span class="l1">READY</span>
+          <span class="l2">SET</span>
+          <span class="l3">COOK!</span>
+        </div>
+        <p class="tagline">The kitchen is open. Orders are coming. GO!</p>
+        <div class="menu-btns">
+          <button id="homePlayBtn" class="btn">▶ PLAY</button>
+          <button id="homeLevelsBtn" class="btn alt">🗺 LEVELS</button>
+          <button id="homeShopBtn" class="btn alt">🛒 SHOP</button>
+          <button id="homeAchBtn" class="btn alt">🏆 TROPHIES</button>
+        </div>
+        <button id="dailyBtn" class="btn daily">🎁 DAILY REWARD</button>
+        <div class="home-stats">
+          <span class="coin-badge"><img src="assets/sorceress/ui/coin.png" alt=""><span id="homeCoins">0</span></span>
+          <span class="bestline">Best: <span id="bestScore">0</span></span>
+        </div>
+        <div class="how">
+          <p class="how-title">How to play</p>
+          <p>1️⃣ Pick an ingredient from the fridge</p>
+          <p>2️⃣ Send it to the right station — 🔪 Chop · 🍳 Cook · 🧊 Blend</p>
+          <p>3️⃣ Finished food waits on the station — tap it to serve!</p>
+          <p>🔥 Food left on the COOK station too long will burn!</p>
+          <p>✨ Serve fast for a FRESH bonus!</p>
+          <p>⭐ <b>Secret Dishes</b> are worth bonus points</p>
+          <p>💔 Orders that run out of patience cost a heart</p>
+          <p>🪙 Earn coins in levels — spend them in the shop!</p>
+        </div>
+      </div>
+
+      <!-- ACHIEVEMENTS -->
+      <div id="achiev" class="overlay">
+        <div class="screen-head">
+          <button id="achBackBtn" class="btn small">‹ HOME</button>
+          <h2 class="screen-title">🏆 Achievements</h2>
+          <span class="coin-badge"><img src="assets/sorceress/ui/coin.png" alt=""><span id="achCoins">0</span></span>
+        </div>
+        <div id="achList" class="ach-list"></div>
+      </div>
+
+      <!-- LEVELS -->
+      <div id="levels" class="overlay">
+        <div class="screen-head">
+          <button id="levelsBackBtn" class="btn small">‹ HOME</button>
+          <h2 class="screen-title">Select Level</h2>
+          <span class="coin-badge"><img src="assets/sorceress/ui/coin.png" alt=""><span id="levelsCoins">0</span></span>
+        </div>
+        <div id="levelGrid" class="level-grid"></div>
+        <div class="booster-wrap">
+          <p class="booster-title">Boosters (tap to activate for the next level)</p>
+          <div id="boosterStrip" class="booster-strip"></div>
+        </div>
+      </div>
+
+      <!-- SHOP -->
+      <div id="shop" class="overlay">
+        <div class="screen-head">
+          <button id="shopBackBtn" class="btn small">‹ HOME</button>
+          <h2 class="screen-title">Shop</h2>
+          <span class="coin-badge"><img src="assets/sorceress/ui/coin.png" alt=""><span id="shopCoins">0</span></span>
+        </div>
+        <div id="shopList" class="shop-list"></div>
+      </div>
+
+      <!-- PAUSE -->
+      <div id="pause" class="overlay">
+        <h1>⏸ PAUSED</h1>
+        <p class="subline" id="pauseInfo"></p>
+        <div class="res-btns">
+          <button id="resumeBtn" class="btn">▶ RESUME</button>
+          <button id="restartBtn" class="btn alt">↻ RESTART</button>
+          <button id="pauseHomeBtn" class="btn alt">🏠 HOME</button>
+        </div>
+      </div>
+
+      <!-- RESULTS -->
+      <div id="results" class="overlay">
+        <h1 id="resTitle">👨‍🍳 LEVEL COMPLETE!</h1>
+        <div id="stars" class="stars"></div>
+        <p class="rank" id="rank"></p>
+        <p class="bigscore" id="finalScore"></p>
+        <p class="subline" id="coinsEarned"></p>
+        <p class="bestline">Best: <span id="bestFinal"></span></p>
+        <div class="res-btns">
+          <button id="retryBtn" class="btn alt">↻ RETRY</button>
+          <button id="nextBtn" class="btn">NEXT LEVEL ▶</button>
+          <button id="homeBtn" class="btn alt">🏠 HOME</button>
+        </div>
+      </div>
+    </div>
+
+    <button id="pauseBtn" title="Pause (P)">⏸</button>
+    <button id="muteBtn" title="Mute (M)">🔊</button>
+    <div id="rotateHint">🔄 Rotate your device — landscape is best!</div>
+  </div>
+</div>
+<script src="game.js"></script>
+</body>
+</html>

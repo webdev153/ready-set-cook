@@ -1,0 +1,12 @@
+{
+  "appId": "com.rscook.app",
+  "appName": "Ready Set Cook!",
+  "webDir": "www",
+  "android": {
+    "allowMixedContent": false,
+    "backgroundColor": "#241a12"
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.cache/
+*.log
+.DS_Store
+*.tmp
+.venv/
+__pycache__/
+*.pyc
+.env
+.env.local
+.wizardgenie/

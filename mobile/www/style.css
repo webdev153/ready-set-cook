@@ -366,3 +366,24 @@ h1 { font-size: clamp(30px, 5vw, 46px); text-shadow: 0 4px 0 rgba(0,0,0,.35); }
   .shop-item .si-icon { width: 36px; height: 36px; }
   .screen-title { font-size: 19px; }
 }
+
+/* stages tall enough to show the how-to box: keep it compact so the home
+   menu never grows taller than the stage and starts scrolling */
+@container (max-height: 700px) {
+  .how { font-size: 12px; padding: 8px 14px; line-height: 1.5; max-width: 420px; }
+}
+
+/* very short stages (landscape phones / small windows): shrink the home
+   menu so it fits fully — no scrolling. safe center falls back to top
+   alignment if content somehow still overflows, so nothing gets clipped. */
+@container (max-height: 430px) {
+  .overlay { justify-content: safe center; gap: 4px; padding: 14px 0; }
+  .hero-chef { height: 32px; }
+  .logo { font-size: 24px; gap: 6px; }
+  .tagline { display: none; }
+  .menu-btns { gap: 6px; }
+  .btn { font-size: 14px; padding: 7px 26px; }
+  .home-stats { gap: 8px; }
+  .coin-badge { font-size: 13px; padding: 2px 10px; }
+  .bestline { font-size: 12px; }
+}

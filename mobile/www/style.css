@@ -14,10 +14,21 @@ html, body {
   background: #241a12;
   font-family: 'Fredoka', 'Arial Rounded MT Bold', 'Trebuchet MS', sans-serif;
   overflow: hidden;
+  /* mobile app-shell pinning: take the page out of the scroll flow so iOS
+     Safari can't rubber-band drag / pan around the game */
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  overscroll-behavior: none;
+  touch-action: manipulation;
+  -webkit-text-size-adjust: 100%;
 }
 
 #wrap {
-  height: 100%;
+  position: fixed;
+  inset: 0;
+  height: 100vh;   /* fallback */
+  height: 100dvh;  /* dynamic viewport height — tracks iOS toolbar show/hide */
   display: flex;
   align-items: center;
   justify-content: center;

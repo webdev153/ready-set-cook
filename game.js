@@ -116,9 +116,17 @@ function applyCanvasSize() {
   canvas.height = Math.round(L.H * DPR);
   ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
 }
+function viewportSize() {
+  // visualViewport = what the user can actually see (iOS Safari toolbars shrink it);
+  // falling back to innerWidth/Height where unsupported
+  const vv = window.visualViewport;
+  return {
+    w: (vv && vv.width) || window.innerWidth || 1280,
+    h: (vv && vv.height) || window.innerHeight || 720,
+  };
+}
 function fitStage() {
-  const vw = window.innerWidth || 1280;
-  const vh = (window.visualViewport && window.visualViewport.height) || window.innerHeight || 720;
+  const { w: vw, h: vh } = viewportSize();
   const s = Math.min(vw / L.W, vh / L.H);
   stage.style.width = Math.floor(L.W * s) + 'px';
   stage.style.height = Math.floor(L.H * s) + 'px';
@@ -133,7 +141,17 @@ L = computeLayout();
 applyCanvasSize();
 fitStage();
 window.addEventListener('resize', onResize);
-if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
+window.addEventListener('orientationchange', () => setTimeout(onResize, 250)); // iOS settles late
+if (window.visualViewport) {
+  // toolbar collapsing/expanding on iOS fires resize AND scroll on the visual viewport
+  window.visualViewport.addEventListener('resize', onResize);
+  window.visualViewport.addEventListener('scroll', onResize);
+}
+// block pinch-zoom and any residual page panning (app is a fixed full-screen shell)
+document.addEventListener('gesturestart', e => e.preventDefault());
+document.addEventListener('touchmove', e => {
+  if (e.target === document.documentElement || e.target === document.body) e.preventDefault();
+}, { passive: false });
 
 const $ = id => document.getElementById(id);
 const homeEl = $('home'), levelsEl = $('levels'), shopEl = $('shop'), resultsEl = $('results'), pauseEl = $('pause');

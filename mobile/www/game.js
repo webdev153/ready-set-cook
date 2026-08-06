@@ -281,6 +281,8 @@ const ASSET = {
     'blend-orange': 'assets/sorceress/sprites/blend-orange.png',
     'blend-apple': 'assets/sorceress/sprites/blend-apple.png',
     'heart': 'assets/sorceress/ui/heart.png',
+    'hand-open': 'assets/sorceress/sprites/hand-open.png',
+    'hand-grip': 'assets/sorceress/sprites/hand-grip.png',
   },
   // ingredient → processed-result sprite key (whole raw sprite is the fallback)
   processed: {
@@ -430,6 +432,7 @@ let score = 0, hearts = 3, combo = 0, level = 1, timeLeft = 0;
 let patienceMult = 1;
 let boosters = { time: false, heart: false, slow: false };
 let orders = [], selectedIdx = null, held = null;
+let armFx = null; // chef-hand animation: { kind, t, dur, tx, ty, item } — kind 'grab' | 'place' | 'collect'
 let stations = [], nextSpawn = 0, cdT = 0, cdWord = '';
 let parts = [], floaters = [], shakeT = 0, shakeMag = 0, paused = false;
 let heartPopT = 0; // >0 while the hearts HUD plays its bounce
@@ -640,9 +643,10 @@ function removeOrder(o) {
 }
 function activeOrders() { return orders.filter(o => o.state === 'active'); }
 
-function placeItem(ingId) {
+function placeItem(ingId, forcedOrder) {
   let target = null;
-  if (selectedIdx != null && orders[selectedIdx] && orders[selectedIdx].state === 'active' && orderNeeds(orders[selectedIdx], ingId)) {
+  if (forcedOrder && forcedOrder.state === 'active' && orderNeeds(forcedOrder, ingId)) target = forcedOrder;
+  if (!target && selectedIdx != null && orders[selectedIdx] && orders[selectedIdx].state === 'active' && orderNeeds(orders[selectedIdx], ingId)) {
     target = orders[selectedIdx];
   }
   if (!target) target = orders.find(o => o.state === 'active' && orderNeeds(o, ingId));
@@ -760,6 +764,90 @@ function stationCenter(s) {
   return { x: L.AREA_X + i * (L.STA_W + L.STA_GAP) + L.STA_W / 2, y: L.STA_Y + L.STA_H * 0.62 };
 }
 
+// ---- chef-hand grab/place animation (liveliness: the arm reaches, grabs, pulls back) ----
+function armAnchor() {
+  return { x: L.W / 2 + 70, y: L.H + 40 }; // right-handed reach from bottom-center
+}
+function armGrab(kind, tx, ty, item) {
+  armFx = { kind, t: 0, dur: 0.85, tx, ty, item };
+}
+function easeOutCubic(p) { return 1 - Math.pow(1 - p, 3); }
+function easeInCubic(p) { return p * p * p; }
+function armHandPos(arm) {
+  const a = armAnchor();
+  if (arm.kind === 'grab') {
+    // reach to the item, then follow the pointer while carrying it
+    if (arm.t < 0.35) { const p = easeOutCubic(arm.t / 0.35); return { x: a.x + (arm.tx - a.x) * p, y: a.y + (arm.ty - a.y) * p }; }
+    return { x: mouse.x, y: mouse.y };
+  }
+  if (arm.kind === 'withdraw') {
+    const p = easeInCubic(Math.min(arm.t / arm.dur, 1));
+    return { x: arm.tx + (a.x - arm.tx) * p, y: arm.ty + (a.y - arm.ty) * p };
+  }
+  if (arm.kind === 'place') {
+    // carry the item in, place it, pull back empty
+    if (arm.t < 0.40) { const p = easeOutCubic(arm.t / 0.40); return { x: a.x + (arm.tx - a.x) * p, y: a.y + (arm.ty - a.y) * p }; }
+    if (arm.t < 0.55) return { x: arm.tx, y: arm.ty };
+    const p = easeInCubic((arm.t - 0.55) / 0.45);
+    return { x: arm.tx + (a.x - arm.tx) * p, y: arm.ty + (a.y - arm.ty) * p };
+  }
+  // collect: reach empty, close, pull back carrying the item
+  if (arm.t < 0.40) { const p = easeOutCubic(arm.t / 0.40); return { x: a.x + (arm.tx - a.x) * p, y: a.y + (arm.ty - a.y) * p }; }
+  if (arm.t < 0.55) return { x: arm.tx, y: arm.ty };
+  const p = easeInCubic((arm.t - 0.55) / 0.45);
+  return { x: arm.tx + (a.x - arm.tx) * p, y: arm.ty + (a.y - arm.ty) * p };
+}
+function armCarrying(arm) {
+  if (arm.kind === 'grab') return arm.t >= 0.35;
+  return arm.kind === 'place' ? arm.t < 0.55 : arm.t >= 0.55;
+}
+function armGripPose(arm) {
+  if (arm.kind === 'grab') return arm.t >= 0.35;
+  if (arm.kind === 'place') return arm.t < 0.40;
+  return arm.t >= 0.40;
+}
+function drawArm() {
+  const arm = armFx;
+  if (!arm) return;
+  const pos = armHandPos(arm);
+  const a = armAnchor();
+  const ang = Math.atan2(a.y - pos.y, a.x - pos.x) - Math.PI / 2;
+  const img = IMG[armGripPose(arm) ? 'hand-grip' : 'hand-open'];
+  ctx.save();
+  ctx.translate(pos.x, pos.y);
+  ctx.rotate(ang);
+  const S = 58; // hand+forearm drawn size
+  if (img) ctx.drawImage(img, -S / 2, -S / 2, S, S);
+  ctx.restore();
+  // the item rides in the hand
+  if (arm.item && armCarrying(arm)) {
+    const dx = a.x - pos.x, dy = a.y - pos.y;
+    const len = Math.hypot(dx, dy) || 1;
+    const hx = pos.x - dx / len * 16, hy = pos.y - dy / len * 16;
+    const iimg = IMG[arm.item];
+    ctx.save();
+    ctx.translate(hx, hy);
+    ctx.rotate(ang + Math.PI / 2); // keep the item upright while the arm rotates
+    if (iimg) ctx.drawImage(iimg, -22, -22, 44, 44);
+    else text(INGREDIENTS[arm.item] ? INGREDIENTS[arm.item].emoji : '🍽️', 0, 0, 38);
+    ctx.restore();
+  }
+}
+function drawRetFx() {
+  for (const f of retFx) {
+    const p = easeOutCubic(Math.min(f.t, 1));
+    const x = f.x + (f.tx - f.x) * p, y = f.y + (f.ty - f.y) * p;
+    const s = f.shrink ? 1 - p * 0.35 : 1;
+    const img = IMG[f.item];
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(s, s);
+    if (img) ctx.drawImage(img, -20, -20, 40, 40);
+    else text(INGREDIENTS[f.item] ? INGREDIENTS[f.item].emoji : '🍽️', 0, 0, 34);
+    ctx.restore();
+  }
+}
+
 function chopHitFx(s) {
   s.hitT = 1;
   const c = stationCenter(s);
@@ -855,12 +943,12 @@ function updateStations(dt) {
   }
 }
 
-// tap a station with a finished item → serve it to the order that wants it
-function collectStation(s) {
-  if (!s.ready) return;
+// serve a finished dish to an order (auto-target, or the ticket the player dragged to)
+function serveDish(s, forcedOrder) {
+  if (!s.ready) return false;
   const ing = s.item;
   const fresh = s.idleT <= FRESH_WINDOW;
-  const ok = placeItem(ing);
+  const ok = placeItem(ing, forcedOrder);
   s.ready = false; s.burning = false; s.item = null; s.idleT = 0;
   if (ok && fresh) {
     score += FRESH_BONUS;
@@ -870,6 +958,12 @@ function collectStation(s) {
     burst(c.x, c.y - 10, ['#8fd46a', '#c8ff9a'], 6, 120);
   }
   if (!ok) addFloater(mouse.x, mouse.y - 40, 'Wasted — nobody wanted it!', '#ff9d8a', 14);
+  return ok;
+}
+
+// tap a station with a finished item → serve it to the order that wants it
+function collectStation(s) {
+  serveDish(s, null);
 }
 
 // ------------------------- UPDATE -------------------------
@@ -915,6 +1009,18 @@ function update(dt) {
   }
 
   if (state !== 'playing') return;
+
+  // chef-hand animation — 'grab' persists while the player carries the item
+  if (armFx) {
+    armFx.t += dt;
+    if (armFx.kind !== 'grab' && armFx.t >= armFx.dur) armFx = null;
+  }
+  // items flying back to the fridge/station
+  for (let i = retFx.length - 1; i >= 0; i--) {
+    const f = retFx[i];
+    f.t += dt / f.dur;
+    if (f.t >= 1) retFx.splice(i, 1);
+  }
 
   // round timer
   timeLeft -= dt;
@@ -1434,8 +1540,8 @@ function drawFridge() {
 }
 
 function drawOverlays() {
-  // held item at cursor
-  if (held && state === 'playing') {
+  // held item at cursor (hidden while the chef hand is carrying it)
+  if (held && state === 'playing' && !(armFx && armCarrying(armFx))) {
     ctx.save();
     ctx.translate(mouse.x, mouse.y + 8);
     ctx.globalAlpha = .9;
@@ -1549,6 +1655,8 @@ function render() {
   ctx.globalAlpha = 1;
 
   drawOverlays();
+  drawArm();
+  drawRetFx();
   ctx.restore();
 }
 
@@ -1558,65 +1666,185 @@ function canvasPos(e) {
   return { x: (e.clientX - rect.left) * (L.W / rect.width), y: (e.clientY - rect.top) * (L.H / rect.height) };
 }
 
-function handleClick(x, y) {
-  ensureAudio();
-  if (state !== 'playing') return;
+// ---- drag input: press an ingredient/dish, carry it, release to drop ----
+// tap (no movement) keeps the old one-tap conveniences; a real drag is honored.
+let downPos = null, dragStart = null, dishDrag = null;
+let stationHandledOnDown = null; // ready station served on pointerdown — skip it on pointerup
+let retFx = []; // items flying back: { item, x, y, tx, ty, t, dur }
 
+function regionAt(x, y) {
   for (let i = regions.length - 1; i >= 0; i--) {
     const r = regions[i];
-    if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) {
-      if (r.kind === 'ingredient') {
-        const ing = INGREDIENTS[r.ref];
-        if (held === r.ref) { held = null; return; }
-        if (ing.proc === 'none') { placeItem(r.ref); SFX.pick(); }
-        else { held = r.ref; SFX.pick(); }
-        return;
+    if (x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h) return r;
+  }
+  return null;
+}
+function fridgeCellCenter(id) {
+  const i = Object.keys(INGREDIENTS).indexOf(id);
+  const col = i % L.CELLS, row = (i / L.CELLS) | 0;
+  return { x: L.AREA_X + 14 + col * (L.CELL_W + L.CELL_GAP) + L.CELL_W / 2, y: L.FRIDGE_Y + 42 + row * (L.CELL_H + 12) + L.CELL_H / 2 };
+}
+function ticketCenter(i) {
+  return { x: L.ORDER_X + L.ORDER_W / 2, y: L.ORDER_Y0 + i * (L.ORDER_H + L.ORDER_GAP) + L.ORDER_H / 2 };
+}
+function returnHeldToFridge() {
+  if (!held) return;
+  const c = fridgeCellCenter(held);
+  retFx.push({ item: held, x: mouse.x, y: mouse.y, tx: c.x, ty: c.y, t: 0, dur: 0.28, shrink: true });
+  held = null;
+  SFX.plop();
+}
+function returnDishToStation() {
+  if (!dishDrag) return;
+  const c = stationCenter(dishDrag.station);
+  retFx.push({ item: dishDrag.ing, x: mouse.x, y: mouse.y, tx: c.x, ty: c.y, t: 0, dur: 0.28, shrink: true });
+  dishDrag = null;
+  SFX.plop();
+}
+function armWithdraw() {
+  armFx = { kind: 'withdraw', t: 0, dur: 0.3, tx: mouse.x, ty: mouse.y };
+}
+
+function handleClick(x, y) {
+  ensureAudio();
+  downPos = { x, y };
+  if (state !== 'playing') return;
+  // a new press cancels any unfinished dish drag (multi-touch safety)
+  if (dishDrag) { returnDishToStation(); armWithdraw(); }
+  dragStart = null;
+  stationHandledOnDown = null;
+  const r = regionAt(x, y);
+  if (!r) return;
+
+  if (r.kind === 'ingredient') {
+    const ing = INGREDIENTS[r.ref];
+    if (held === r.ref) { returnHeldToFridge(); armWithdraw(); return; } // tap the carried item again → put it back
+    // chef hand sweeps in to grab it
+    const c = fridgeCellCenter(r.ref);
+    armGrab('grab', c.x, c.y, r.ref);
+    if (ing.proc === 'none') { placeItem(r.ref); SFX.pick(); }
+    else { held = r.ref; SFX.pick(); }
+    return;
+  }
+  if (r.kind === 'station') {
+    const def = STATION_DEFS.find(d => d.id === r.ref.id);
+    if (r.ref.ready) {
+      if (held) {
+        // carrying an ingredient: one tap serves the dish and accepts the next one
+        stationHandledOnDown = r.ref;
+        armGrab('collect', stationCenter(r.ref).x, stationCenter(r.ref).y, ASSET.processed[r.ref.item] || r.ref.item);
+        collectStation(r.ref);
+        if (def.id === INGREDIENTS[held].proc) { startStationProc(r.ref, held); held = null; }
+        else { SFX.buzz(); shake(3, .15); buzzPhone(45); addFloater(x, y - 30, 'Wrong station!', '#ff9d8a', 15); }
+      } else {
+        // empty hand: a quick tap serves; dragging picks the dish up to carry it to a customer
+        dragStart = { x, y, station: r.ref, active: false };
       }
-      if (r.kind === 'station') {
-        const def = STATION_DEFS.find(d => d.id === r.ref.id);
-        if (r.ref.ready) {
-          // the previous item is done — serve it and accept the next one in one tap
-          collectStation(r.ref);
-          if (held && def.id === INGREDIENTS[held].proc) {
-            startStationProc(r.ref, held); held = null;
-          } else if (held) {
-            SFX.buzz(); shake(3, .15); buzzPhone(45);
-            addFloater(x, y - 30, 'Wrong station!', '#ff9d8a', 15);
-          }
-          return;
-        }
-        if (held) {
-          const def = STATION_DEFS.find(d => d.id === r.ref.id);
-          if (def.id !== INGREDIENTS[held].proc) {
-            SFX.buzz(); shake(3, .15); buzzPhone(45);
-            addFloater(x, y - 30, 'Wrong station!', '#ff9d8a', 15);
-          } else if (r.ref.busy) {
-            SFX.buzz(); buzzPhone(30);
-            addFloater(x, y - 30, 'Station busy — wait!', '#ffd76a', 14);
-          } else {
-            startStationProc(r.ref, held); held = null;
-          }
-        } else {
-          SFX.buzz(); shake(2, .12);
-          addFloater(x, y - 30, 'Grab an ingredient first!', '#ffd76a', 14);
-        }
-        return;
-      }
-      if (r.kind === 'ticket') {
-        const o = orders[r.ref];
-        if (o && o.state === 'active') {
-          selectedIdx = (selectedIdx === r.ref) ? null : r.ref;
-          SFX.pick();
-        }
+      return;
+    }
+    if (held) return; // the drop happens on pointerup — lets you drag THROUGH stations
+    SFX.buzz(); shake(2, .12);
+    addFloater(x, y - 30, 'Grab an ingredient first!', '#ffd76a', 14);
+    return;
+  }
+
+  if (r.kind === 'ticket') {
+    const o = orders[r.ref];
+    if (o && o.state === 'active') { selectedIdx = (selectedIdx === r.ref) ? null : r.ref; SFX.pick(); }
+    return;
+  }
+}
+
+function handlePointerUp(x, y) {
+  if (state !== 'playing') return;
+  const r = regionAt(x, y);
+  const moved = downPos ? Math.hypot(x - downPos.x, y - downPos.y) > 10 : true;
+  downPos = null;
+
+  // dragging a finished dish: drop it on a matching customer ticket to serve
+  if (dishDrag) {
+    const ing = dishDrag.ing;
+    if (r && r.kind === 'ticket') {
+      const o = orders[r.ref];
+      if (o && o.state === 'active' && orderNeeds(o, ing)) {
+        const t = ticketCenter(r.ref);
+        retFx.push({ item: ASSET.processed[ing] || ing, x: mouse.x, y: mouse.y, tx: t.x, ty: t.y, t: 0, dur: 0.22, shrink: true });
+        const s = dishDrag.station;
+        dishDrag = null;
+        serveDish(s, o);
+        armWithdraw();
         return;
       }
     }
+    returnDishToStation();
+    armWithdraw();
+    return;
   }
-  // empty space
-  if (held) held = null;
+
+  if (held) {
+    if (r && r.kind === 'station') {
+      // pointerdown already served this station (tap while carrying) — don't re-handle
+      if (stationHandledOnDown === r.ref) { stationHandledOnDown = null; return; }
+      const def = STATION_DEFS.find(d => d.id === r.ref.id);
+      if (r.ref.ready) {
+        // serve the finished dish and drop the held ingredient in one release
+        armGrab('collect', stationCenter(r.ref).x, stationCenter(r.ref).y, ASSET.processed[r.ref.item] || r.ref.item);
+        collectStation(r.ref);
+        if (def.id === INGREDIENTS[held].proc) {
+          armGrab('place', stationCenter(r.ref).x, stationCenter(r.ref).y, held);
+          startStationProc(r.ref, held); held = null;
+        } else {
+          SFX.buzz(); shake(3, .15); buzzPhone(45);
+          addFloater(x, y - 30, 'Wrong station!', '#ff9d8a', 15);
+          returnHeldToFridge();
+        }
+        return;
+      }
+      if (r.ref.busy) {
+        SFX.buzz(); buzzPhone(30);
+        addFloater(x, y - 30, 'Station busy — wait!', '#ffd76a', 14);
+        returnHeldToFridge();
+        return;
+      }
+      if (def.id === INGREDIENTS[held].proc) {
+        armGrab('place', stationCenter(r.ref).x, stationCenter(r.ref).y, held);
+        startStationProc(r.ref, held); held = null;
+      } else {
+        SFX.buzz(); shake(3, .15); buzzPhone(45);
+        addFloater(x, y - 30, 'Wrong station!', '#ff9d8a', 15);
+        returnHeldToFridge();
+      }
+      return;
+    }
+    // a quick tap that just picked up keeps carrying; a real drag release puts it back
+    if (!moved && r && r.kind === 'ingredient' && r.ref === held) return;
+    returnHeldToFridge();
+    armWithdraw();
+    return;
+  }
+
+  // quick tap on a ready station with an empty hand → instant serve
+  if (dragStart && !dragStart.active && r && r.kind === 'station' && r.ref === dragStart.station && r.ref.ready) {
+    armGrab('collect', stationCenter(r.ref).x, stationCenter(r.ref).y, ASSET.processed[r.ref.item] || r.ref.item);
+    collectStation(r.ref);
+  }
+  dragStart = null;
 }
 
-canvas.addEventListener('pointermove', e => { mouse = canvasPos(e); });
+let pointerOnCanvas = false;
+canvas.addEventListener('pointermove', e => {
+  const p = canvasPos(e);
+  mouse = p;
+  // a press on a ready station becomes a dish drag once the pointer moves
+  if (dragStart && !dragStart.active && state === 'playing' && Math.hypot(p.x - dragStart.x, p.y - dragStart.y) > 14) {
+    dragStart.active = true;
+    if (dragStart.station.ready) {
+      dishDrag = { ing: dragStart.station.item, station: dragStart.station };
+      const c = stationCenter(dragStart.station);
+      armGrab('grab', c.x, c.y, ASSET.processed[dishDrag.ing] || dishDrag.ing);
+    }
+  }
+});
 // window-level move so the menu parallax still tracks the cursor over overlays
 window.addEventListener('pointermove', e => {
   const rect = stage.getBoundingClientRect();
@@ -1626,15 +1854,31 @@ canvas.addEventListener('pointerdown', e => {
   e.preventDefault();
   ensureAudio();
   startMusic();
+  pointerOnCanvas = true;
   const p = canvasPos(e);
   mouse = p;
   handleClick(p.x, p.y);
 });
-canvas.addEventListener('contextmenu', e => { e.preventDefault(); held = null; });
+// releases are handled at window level so drags let go outside the canvas too
+window.addEventListener('pointerup', e => {
+  if (!pointerOnCanvas) return;
+  pointerOnCanvas = false;
+  const rect = stage.getBoundingClientRect();
+  const p = { x: (e.clientX - rect.left) * (L.W / rect.width), y: (e.clientY - rect.top) * (L.H / rect.height) };
+  mouse = p;
+  handlePointerUp(p.x, p.y);
+});
+function cancelCarry() {
+  if (dishDrag) returnDishToStation();
+  if (held) returnHeldToFridge();
+  armWithdraw();
+  downPos = null; dragStart = null;
+}
+canvas.addEventListener('contextmenu', e => { e.preventDefault(); cancelCarry(); });
 window.addEventListener('keydown', e => {
   if (e.key === 'm' || e.key === 'M') { toggleSetting('sfxOn'); return; }
   if (e.key === 's' || e.key === 'S') { settingsBtn.click(); return; }
-  if (e.key === 'Escape') { held = null; return; }
+  if (e.key === 'Escape') { cancelCarry(); return; }
   if (e.key === 'p' || e.key === 'P') { togglePause(); return; }
 });
 // auto-pause when the app loses focus (tab switch / phone call)

@@ -35,6 +35,7 @@ global.window = {
 };
 global.requestAnimationFrame = cb => { rafCb = cb; };
 global.addEventListener = () => {};
+elements['stage'] = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 960, height: 640 }), style: {} };
 elements['game'] = {
   getContext: () => ctxProxy,
   width: 960, height: 640,
@@ -50,7 +51,11 @@ function run(seconds) {
   const steps = Math.max(1, Math.round(seconds / 0.0167));
   for (let i = 0; i < steps; i++) { simT += 16.7; rafCb(simT); }
 }
-function click(x, y) { listeners['game'].pointerdown({ clientX: x, clientY: y, preventDefault() {} }); }
+function click(x, y) {
+  const e = { clientX: x, clientY: y, preventDefault() {} };
+  listeners['game'].pointerdown(e);
+  listeners['window'].pointerup(e);
+}
 
 // layout helpers (mirror game.js constants)
 const ING_IDS = ['lettuce', 'tomato', 'cucumber', 'onion', 'carrot', 'beef', 'egg', 'water', 'bun', 'cheese', 'orange', 'apple'];
@@ -108,11 +113,13 @@ if (needsLettuce) assert(G.orders.some(o => o.filled.includes('lettuce')), 'coll
 else console.log('ok: lettuce collected — no order needs it');
 assert(G.stations[0].ready === false && G.stations[0].item === null, 'station cleared after collect');
 
-// ---- wrong station keeps the item ----
+// ---- wrong station returns the item to the fridge ----
 clickIng('onion');                    // nobody needs onion in round 1 — pure mechanics test
 assert(G.held === 'onion', 'picked onion');
 clickSta('blend');                    // wrong for onion
-assert(G.held === 'onion', 'wrong station rejected, item kept');
+assert(G.held === null, 'wrong station rejected — item returns to the fridge');
+clickIng('onion');                    // grab it again
+assert(G.held === 'onion', 're-picked onion after return');
 clickSta('chop');                     // right station
 run(1.3);
 assert(G.stations[0].busy === false && G.stations[0].ready === true, 'onion chopped — waiting to be served');
@@ -141,11 +148,9 @@ assert(G.stations[1].busy && G.stations[1].item === 'beef', 'cook station workin
 clickIng('beef');
 assert(G.held === 'beef', 'picked second beef');
 clickSta('cook');
-assert(G.held === 'beef' && G.stations[1].queue === undefined, 'busy station rejected the item, kept in hand');
+assert(G.held === null, 'busy station rejected — item returns to the fridge');
 run(2.1);
 assert(G.stations[1].busy === false && G.stations[1].ready === true, 'cook finished — steak ready');
-click(480, 630);                        // empty bottom strip clears the held second beef
-assert(G.held === null, 'hand cleared');
 clickSta('cook');                       // collect the steak → beef lands on the burger order
 run(0.3);
 

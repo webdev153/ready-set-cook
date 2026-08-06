@@ -31,10 +31,11 @@ let simT = 1000000;
 global.window = {
   innerWidth: 390, innerHeight: 844, devicePixelRatio: 3,
   localStorage: { getItem: () => null, setItem() {} },
-  addEventListener() {},
+  addEventListener(t, fn) { (listeners['window'] ||= {})[t] = fn; },
 };
 global.requestAnimationFrame = cb => { rafCb = cb; };
 global.addEventListener = () => {};
+elements['stage'] = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 390, height: 585 }), style: {} };
 elements['game'] = {
   getContext: () => ctxProxy,
   width: 0, height: 0,
@@ -52,7 +53,9 @@ function run(seconds) {
 }
 function click(lx, ly) {
   const s = 390 / 640; // stage fit scale: canvas CSS px per logical px
-  listeners['game'].pointerdown({ clientX: lx * s, clientY: ly * s, preventDefault() {} });
+  const e = { clientX: lx * s, clientY: ly * s, preventDefault() {} };
+  listeners['game'].pointerdown(e);
+  listeners['window'].pointerup(e);
 }
 
 // ---- portrait layout selected ----
@@ -73,12 +76,14 @@ assert(G.stations[0].busy && G.stations[0].item === 'lettuce', 'chop station wor
 run(1.3);
 assert(G.stations[0].busy === false && G.stations[0].ready === true, 'chop station finished — ready');
 
-// ---- wrong station keeps item ----
+// ---- wrong station returns item to the fridge ----
 click(316, 344);                       // lettuce again
 click(442, 133);                       // cook station → wrong for lettuce
-assert(G.held === 'lettuce', 'wrong station rejected in portrait');
-click(60, 900);                        // empty space clears the hand
-assert(G.held === null, 'clicking empty space clears held item');
+assert(G.held === null, 'wrong station rejected — item returns to fridge in portrait');
+click(316, 344);                       // grab the lettuce again
+assert(G.held === 'lettuce', 're-picked lettuce in portrait');
+click(60, 900);                        // empty space returns the hand's item
+assert(G.held === null, 'clicking empty space returns held item');
 click(306, 133);                       // collect the ready lettuce (wasted if no order needs it)
 run(0.3);
 assert(G.stations[0].ready === false, 'station cleared after collect');

@@ -32,10 +32,11 @@ let simT = 1000000;
 global.window = {
   innerWidth: 1280, innerHeight: 720,
   localStorage: { getItem: () => null, setItem() {} },
-  addEventListener() {},
+  addEventListener(t, fn) { (listeners['window'] ||= {})[t] = fn; },
 };
 global.requestAnimationFrame = cb => { rafCb = cb; };
 global.addEventListener = () => {};
+elements['stage'] = { getBoundingClientRect: () => ({ left: 0, top: 0, width: 960, height: 640 }), style: {} };
 elements['game'] = {
   getContext: () => ctxProxy,
   width: 0, height: 0,
@@ -51,7 +52,11 @@ function run(seconds) {
   const steps = Math.max(1, Math.round(seconds / 0.0167));
   for (let i = 0; i < steps; i++) { simT += 16.7; rafCb(simT); }
 }
-function click(x, y) { listeners['game'].pointerdown({ clientX: x, clientY: y, preventDefault() {} }); }
+function click(x, y) {
+  const e = { clientX: x, clientY: y, preventDefault() {} };
+  listeners['game'].pointerdown(e);
+  listeners['window'].pointerup(e);
+}
 // fridge cell center helper (landscape 6x2 grid)
 function cellPos(id) {
   const ids = ['lettuce', 'tomato', 'cucumber', 'onion', 'carrot', 'beef', 'egg', 'water', 'bun', 'cheese', 'orange', 'apple'];

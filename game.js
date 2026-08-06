@@ -160,7 +160,8 @@ const homeCoinsEl = $('homeCoins'), levelsCoinsEl = $('levelsCoins'), shopCoinsE
 const resTitleEl = $('resTitle'), starsEl = $('stars'), rankEl = $('rank'), finalScoreEl = $('finalScore'), coinsEl = $('coinsEarned');
 const nextBtn = $('nextBtn'), retryBtn = $('retryBtn'), homeBtn = $('homeBtn');
 const pauseBtn = $('pauseBtn'), resumeBtn = $('resumeBtn'), restartBtn = $('restartBtn'), pauseHomeBtn = $('pauseHomeBtn'), pauseInfoEl = $('pauseInfo');
-const muteBtn = $('muteBtn');
+const settingsBtn = $('settingsBtn'), settingsEl = $('settings');
+const musicToggleEl = $('musicToggle'), sfxToggleEl = $('sfxToggle'), vibrateToggleEl = $('vibrateToggle'), settingsBackBtn = $('settingsBackBtn');
 const dailyBtn = $('dailyBtn'), dailyIcoEl = $('dailyIco'), dailyLabelEl = $('dailyLabel'), dailyStreakEl = $('dailyStreak');
 const continueBtn = $('continueBtn'), welcomeLineEl = $('welcomeLine'), specialCardEl = $('specialCard');
 const homeLevelEl = $('homeLevel'), homeStarsEl = $('homeStars');
@@ -168,13 +169,15 @@ const tutorialEl = $('tutorial');
 const achEl = $('achiev'), achList = $('achList');
 
 // ------------------------- AUDIO (WebAudio synth) -------------------------
-let actx = null, muted = false;
+let actx = null;
+// per-channel audio settings (mirrored into save — see applySettings)
+let sfxOn = true, musicOn = true, vibrateOn = true;
 function ensureAudio() {
   if (!actx) { try { actx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { actx = null; } }
   if (actx && actx.state === 'suspended') actx.resume();
 }
 function tone(f, dur, type = 'sine', vol = 0.18, slideTo = null, delay = 0) {
-  if (muted || !actx) return;
+  if (!sfxOn || !actx) return;
   const t0 = actx.currentTime + delay;
   const o = actx.createOscillator(), g = actx.createGain();
   o.type = type;
@@ -186,7 +189,7 @@ function tone(f, dur, type = 'sine', vol = 0.18, slideTo = null, delay = 0) {
   o.start(t0); o.stop(t0 + dur + 0.03);
 }
 function noise(dur, vol = 0.15, freq = 3000, delay = 0) {
-  if (muted || !actx) return;
+  if (!sfxOn || !actx) return;
   const t0 = actx.currentTime + delay;
   const len = Math.max(1, Math.floor(actx.sampleRate * dur));
   const buf = actx.createBuffer(1, len, actx.sampleRate);
@@ -215,7 +218,32 @@ const SFX = {
   go()    { tone(523, .1, 'triangle', .22); tone(784, .18, 'triangle', .22, 0, .1); tone(1046, .38, 'triangle', .24, 0, .25); },
   fanfare(){ [523, 659, 784].forEach((f, i) => tone(f, .3, 'triangle', .2, 0, i * .12)); [659, 784, 1046].forEach((f, i) => tone(f, .42, 'triangle', .2, 0, .5 + i * .13)); },
 };
-muteBtn.addEventListener('click', () => { muted = !muted; muteBtn.textContent = muted ? '🔇' : '🔊'; if (musicEl) musicEl.muted = muted; });
+// Settings (gear): Music / Sound FX / Vibration toggles. Opened from menus or
+// mid-game (pauses the run first — back returns to the pause screen).
+let settingsFrom = 'home';
+settingsBtn.addEventListener('click', () => {
+  ensureAudio();
+  if (state === 'gameOver' || state === 'levelEnd') return; // results screen has its own buttons
+  if (state === 'title') {
+    settingsFrom = homeEl.classList.contains('show') ? 'home' : levelsEl.classList.contains('show') ? 'levels' : shopEl.classList.contains('show') ? 'shop' : achEl.classList.contains('show') ? 'achiev' : 'home';
+  } else {
+    if (!paused) { paused = true; hideTutorial(); pauseInfoEl.textContent = 'Level ' + level + ' — ' + LEVELS[level - 1].name; }
+    settingsFrom = 'pause';
+  }
+  showOverlay('settings');
+});
+settingsBackBtn.addEventListener('click', () => showOverlay(settingsFrom === 'pause' ? 'pause' : settingsFrom));
+function toggleSetting(key) {
+  const v = !save[key];
+  save[key] = v;
+  if (key === 'musicOn') musicOn = v; else if (key === 'sfxOn') sfxOn = v; else vibrateOn = v;
+  persist();
+  applySettings();
+  if (key === 'sfxOn' && v) SFX.pick();
+}
+musicToggleEl.addEventListener('click', () => toggleSetting('musicOn'));
+sfxToggleEl.addEventListener('click', () => toggleSetting('sfxOn'));
+vibrateToggleEl.addEventListener('click', () => toggleSetting('vibrateOn'));
 
 // ------------------------- ASSETS (generated art + audio) -------------------------
 const ASSET = {
@@ -249,6 +277,8 @@ const ASSET = {
     'chop-carrot': 'assets/sorceress/sprites/chop-carrot.png',
     'cook-beef': 'assets/sorceress/sprites/cook-beef.png',
     'cook-egg': 'assets/sorceress/sprites/cook-egg.png',
+    'blend-orange': 'assets/sorceress/sprites/blend-orange.png',
+    'blend-apple': 'assets/sorceress/sprites/blend-apple.png',
   },
   // ingredient → processed-result sprite key (whole raw sprite is the fallback)
   processed: {
@@ -259,6 +289,16 @@ const ASSET = {
     carrot: 'chop-carrot',
     beef: 'cook-beef',
     egg: 'cook-egg',
+    orange: 'blend-orange',
+    apple: 'blend-apple',
+  },
+  // per-level kitchen backgrounds (lazy-loaded on level start; classic bg is the fallback)
+  bgs: {
+    1: 'assets/sorceress/levels/bg-l1.png',
+    2: 'assets/sorceress/levels/bg-l2.png',
+    3: 'assets/sorceress/levels/bg-l3.png',
+    4: 'assets/sorceress/levels/bg-l4.png',
+    5: 'assets/sorceress/levels/bg-l5.png',
   },
   anims: {
     'anim-chop': 'assets/sorceress/autosprite/small/anim-chop.png',
@@ -334,14 +374,14 @@ if (typeof Audio !== 'undefined') {
   musicEl.preload = 'none';   // don't download the track until the first tap starts it
 }
 function playMp3(id) {
-  if (muted) return false;
+  if (!sfxOn) return false;
   const a = SFXA[id];
   if (!a || a.readyState < 1) return false;
   try { a.currentTime = 0; a.play().catch(() => {}); } catch (e) { return false; }
   return true;
 }
 function startMusic() {
-  if (!musicEl || muted) return;
+  if (!musicEl || !musicOn) return;
   try { musicEl.play().catch(() => {}); } catch (e) { /* no audio */ }
 }
 
@@ -375,6 +415,7 @@ function defaultSave() {
     achClaimed: [],
     lastDaily: '', dailyStreak: 0,
     tut: 0, // highest level whose in-game tutorial was completed (1-4)
+    musicOn: true, sfxOn: true, vibrateOn: true,
   };
 }
 let save = defaultSave();
@@ -383,6 +424,9 @@ try {
   if (raw) save = Object.assign(defaultSave(), JSON.parse(raw));
 } catch (e) { /* fresh save */ }
 function persist() { try { window.localStorage.setItem('rsc_save_v2', JSON.stringify(save)); } catch (e) { /* storage unavailable */ } }
+// push saved settings into the live audio flags + UI switches
+sfxOn = save.sfxOn; musicOn = save.musicOn; vibrateOn = save.vibrateOn;
+applySettings();
 
 // ------------------------- HELPERS -------------------------
 function rr(x, y, w, h, r) {
@@ -447,6 +491,8 @@ function startLevel(n) {
   showOverlay(null);
   renderCoins();
   requestWakeLock();
+  // lazy-load this level's kitchen background (classic bg shows until it arrives)
+  if (ASSET.bgs[level]) loadImg('bg' + level, ASSET.bgs[level]);
 }
 function startRound(r) { startLevel(r); } // legacy alias
 
@@ -871,7 +917,8 @@ function update(dt) {
 
 // ------------------------- RENDER -------------------------
 function drawBackground() {
-  const bg = IMG.bg;
+  // during a level use that level's kitchen, otherwise the classic backdrop
+  const bg = (state !== 'title' && IMG['bg' + level]) || IMG.bg;
   if (bg) {
     const s = Math.max(L.W / bg.width, L.H / bg.height);
     const dw = bg.width * s, dh = bg.height * s;
@@ -1536,7 +1583,8 @@ canvas.addEventListener('pointerdown', e => {
 });
 canvas.addEventListener('contextmenu', e => { e.preventDefault(); held = null; });
 window.addEventListener('keydown', e => {
-  if (e.key === 'm' || e.key === 'M') { muteBtn.click(); return; }
+  if (e.key === 'm' || e.key === 'M') { toggleSetting('sfxOn'); return; }
+  if (e.key === 's' || e.key === 'S') { settingsBtn.click(); return; }
   if (e.key === 'Escape') { held = null; return; }
   if (e.key === 'p' || e.key === 'P') { togglePause(); return; }
 });
@@ -1546,7 +1594,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 pauseBtn.addEventListener('click', () => { ensureAudio(); togglePause(); });
-resumeBtn.addEventListener('click', () => { togglePause(); });
+resumeBtn.addEventListener('click', () => { if (paused) { paused = false; showOverlay(null); } });
 restartBtn.addEventListener('click', () => { ensureAudio(); startMusic(); startLevel(level); });
 pauseHomeBtn.addEventListener('click', () => { paused = false; state = 'title'; showOverlay('home'); });
 dailyBtn.addEventListener('click', () => { ensureAudio(); dailyReward(); });
@@ -1570,9 +1618,9 @@ try {
 
 // ------------------------- UI (menus, levels, shop) -------------------------
 function showOverlay(id) {
-  for (const el of [homeEl, levelsEl, shopEl, resultsEl, pauseEl, achEl]) el.classList.remove('show');
+  for (const el of [homeEl, levelsEl, shopEl, resultsEl, pauseEl, achEl, settingsEl]) el.classList.remove('show');
   if (!id) return;
-  const target = id === 'home' ? homeEl : id === 'levels' ? levelsEl : id === 'shop' ? shopEl : id === 'pause' ? pauseEl : id === 'achiev' ? achEl : resultsEl;
+  const target = id === 'home' ? homeEl : id === 'levels' ? levelsEl : id === 'shop' ? shopEl : id === 'pause' ? pauseEl : id === 'achiev' ? achEl : id === 'settings' ? settingsEl : resultsEl;
   target.classList.add('show');
   renderCoins();
   renderDaily();
@@ -1618,6 +1666,7 @@ document.addEventListener('visibilitychange', () => {
 });
 
 function buzzPhone(pattern) {
+  if (!vibrateOn) return;
   try { if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(pattern); } catch (e) { /* no haptics */ }
 }
 function coinPop(el) {
@@ -1653,15 +1702,36 @@ function buyItem(id) {
 // ------------------------- DAILY REWARD -------------------------
 function todayStr() { return new Date().toDateString(); }
 function dailyAmount() { return Math.min(50 + (save.dailyStreak || 0) * 10, 150); }
+// consistent icon set — crisp line SVGs instead of mixed emoji (gift / check / flame)
+const ICON = {
+  gift: '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="9.5" width="16" height="11" rx="1.6"/><path d="M4 13.5h16M12 9.5v11"/><path d="M12 9.5c-1-2.6-6.4-2.6-5.6-.2.7 2 5.6 1.4 5.6-.4zm0 0c1-2.6 6.4-2.6 5.6-.2-.7 2-5.6 1.4-5.6-.4z"/></svg>',
+  check: '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4.5 12.8l4.6 4.6L19.5 6.8"/></svg>',
+  flame: '<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.8s4.6 3.7 4.6 8.4a4.6 4.6 0 0 1-9.2 0c0-1.8.8-3.6 1.9-5.2.9 1.4 2.2 1.8 2.7 1.6-.3-1.4.1-3.2 0-4.8z" fill="currentColor" stroke="none"/></svg>',
+};
 function renderDaily() {
   if (!dailyBtn) return;
   const claimed = save.lastDaily === todayStr();
   dailyBtn.disabled = claimed;
-  dailyIcoEl.textContent = claimed ? '✅' : '🎁';
+  dailyIcoEl.innerHTML = claimed ? ICON.check : ICON.gift;
   dailyLabelEl.textContent = claimed ? 'Claimed' : '+' + dailyAmount();
   const st = save.dailyStreak || 0;
-  dailyStreakEl.textContent = st > 0 ? '🔥' + st : '';
+  dailyStreakEl.innerHTML = st > 0 ? ICON.flame + '<b>' + st + '</b>' : '';
   dailyBtn.title = claimed ? 'Claimed — come back tomorrow!' : 'Claim your daily reward!';
+}
+
+// settings: mirror the saved flags into the live audio graph + toggle switches
+function applySettings() {
+  if (musicEl) musicEl.muted = !musicOn;
+  renderSettings();
+}
+function renderSettings() {
+  if (!musicToggleEl || typeof musicToggleEl.setAttribute !== 'function') return;
+  musicToggleEl.classList.toggle('on', musicOn);
+  sfxToggleEl.classList.toggle('on', sfxOn);
+  vibrateToggleEl.classList.toggle('on', vibrateOn);
+  musicToggleEl.setAttribute('aria-checked', '' + musicOn);
+  sfxToggleEl.setAttribute('aria-checked', '' + sfxOn);
+  vibrateToggleEl.setAttribute('aria-checked', '' + vibrateOn);
 }
 
 // home screen: welcome line, continue button, progress cards, today's special

@@ -10,6 +10,7 @@ const OUT = path.join(ROOT, 'mobile', 'www');
 
 const COPY_DIRS = [
   'assets/fonts',
+  'assets/sorceress/levels',
   'assets/sorceress/sprites',
   'assets/sorceress/ui',
   'assets/sorceress/themes',

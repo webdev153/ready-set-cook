@@ -26,7 +26,8 @@ const ctxProxy = new Proxy({}, {
   set() { return true; },
 });
 let rafCb = null;
-let simT = 0;
+// start above the real clock so the first-frame dt is positive (avoids stalling countdown)
+let simT = 1000000;
 global.window = {
   innerWidth: 390, innerHeight: 844, devicePixelRatio: 3,
   localStorage: { getItem: () => null, setItem() {} },

@@ -22,34 +22,39 @@
     <div id="overlays">
       <!-- HOME -->
       <div id="home" class="overlay show">
-        <img id="heroChef" src="assets/sorceress/ui/hero-chef.png" alt="" class="hero-chef" onerror="this.style.display='none'">
+        <div class="home-topbar">
+          <button id="dailyBtn" class="daily-chip" title="Daily reward">
+            <span class="daily-ico" id="dailyIco">🎁</span>
+            <span id="dailyLabel">+50</span>
+            <span class="daily-streak" id="dailyStreak"></span>
+          </button>
+          <span class="coin-badge big"><img src="assets/sorceress/ui/coin.png" alt=""><span id="homeCoins">0</span></span>
+        </div>
+        <div class="chef-stand">
+          <div class="chef-shadow"></div>
+          <img id="heroChef" src="assets/sorceress/ui/hero-chef.png" alt="" class="hero-chef" onerror="this.style.display='none'">
+        </div>
         <div class="logo">
           <span class="l1">READY</span>
           <span class="l2">SET</span>
           <span class="l3">COOK!</span>
         </div>
         <p class="tagline">The kitchen is open. Orders are coming. GO!</p>
+        <p class="welcome" id="welcomeLine">Welcome, Chef!</p>
+        <div class="special-card" id="specialCard"></div>
         <div class="menu-btns">
-          <button id="homePlayBtn" class="btn">▶ PLAY</button>
-          <button id="homeLevelsBtn" class="btn alt">🗺 LEVELS</button>
-          <button id="homeShopBtn" class="btn alt">🛒 SHOP</button>
-          <button id="homeAchBtn" class="btn alt">🏆 TROPHIES</button>
+          <button id="homePlayBtn" class="btn primary">▶ PLAY</button>
+          <button id="continueBtn" class="btn secondary" hidden>Continue · Level 1</button>
+          <button id="homeLevelsBtn" class="btn secondary">🗺 Levels</button>
+          <div class="menu-row">
+            <button id="homeShopBtn" class="btn tertiary">🛒 Shop</button>
+            <button id="homeAchBtn" class="btn tertiary">🏆 Trophies</button>
+          </div>
         </div>
-        <button id="dailyBtn" class="btn daily">🎁 DAILY REWARD</button>
-        <div class="home-stats">
-          <span class="coin-badge"><img src="assets/sorceress/ui/coin.png" alt=""><span id="homeCoins">0</span></span>
-          <span class="bestline">Best: <span id="bestScore">0</span></span>
-        </div>
-        <div class="how">
-          <p class="how-title">How to play</p>
-          <p>1️⃣ Pick an ingredient from the fridge</p>
-          <p>2️⃣ Send it to the right station — 🔪 Chop · 🍳 Cook · 🧊 Blend</p>
-          <p>3️⃣ Finished food waits on the station — tap it to serve!</p>
-          <p>🔥 Food left on the COOK station too long will burn!</p>
-          <p>✨ Serve fast for a FRESH bonus!</p>
-          <p>⭐ <b>Secret Dishes</b> are worth bonus points</p>
-          <p>💔 Orders that run out of patience cost a heart</p>
-          <p>🪙 Earn coins in levels — spend them in the shop!</p>
+        <div class="home-cards">
+          <span class="stat-card">⭐ High Score <b id="bestScore">0</b></span>
+          <span class="stat-card">Level <b id="homeLevel">1</b></span>
+          <span class="stat-card">⭐ <b id="homeStars">0</b> stars</span>
         </div>
       </div>
 
@@ -116,6 +121,7 @@
 
     <button id="pauseBtn" title="Pause (P)">⏸</button>
     <button id="muteBtn" title="Mute (M)">🔊</button>
+    <div id="tutorial" class="tutorial" hidden></div>
     <div id="rotateHint">🔄 Rotate your device — landscape is best!</div>
   </div>
 </div>

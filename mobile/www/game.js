@@ -161,7 +161,10 @@ const resTitleEl = $('resTitle'), starsEl = $('stars'), rankEl = $('rank'), fina
 const nextBtn = $('nextBtn'), retryBtn = $('retryBtn'), homeBtn = $('homeBtn');
 const pauseBtn = $('pauseBtn'), resumeBtn = $('resumeBtn'), restartBtn = $('restartBtn'), pauseHomeBtn = $('pauseHomeBtn'), pauseInfoEl = $('pauseInfo');
 const muteBtn = $('muteBtn');
-const dailyBtn = $('dailyBtn');
+const dailyBtn = $('dailyBtn'), dailyIcoEl = $('dailyIco'), dailyLabelEl = $('dailyLabel'), dailyStreakEl = $('dailyStreak');
+const continueBtn = $('continueBtn'), welcomeLineEl = $('welcomeLine'), specialCardEl = $('specialCard');
+const homeLevelEl = $('homeLevel'), homeStarsEl = $('homeStars');
+const tutorialEl = $('tutorial');
 const achEl = $('achiev'), achList = $('achList');
 
 // ------------------------- AUDIO (WebAudio synth) -------------------------
@@ -350,6 +353,7 @@ let boosters = { time: false, heart: false, slow: false };
 let orders = [], selectedIdx = null, held = null;
 let stations = [], nextSpawn = 0, cdT = 0, cdWord = '';
 let parts = [], floaters = [], shakeT = 0, shakeMag = 0, paused = false;
+let heartPopT = 0; // >0 while the hearts HUD plays its bounce
 let mouse = { x: -100, y: -100 };
 let regions = [];
 let secretRecipe = null;
@@ -370,6 +374,7 @@ function defaultSave() {
     stats: { served: 0, maxCombo: 0, star3s: 0, perfects: 0, burned: 0, freshServes: 0 },
     achClaimed: [],
     lastDaily: '', dailyStreak: 0,
+    tut: 0, // highest level whose in-game tutorial was completed (1-4)
   };
 }
 let save = defaultSave();
@@ -422,6 +427,7 @@ function startLevel(n) {
   const cfg = LEVELS[level - 1];
   score = 0; combo = 0;
   hearts = cfg.hearts + (boosters.heart ? 1 : 0);
+  heartPopT = 0.5;
   timeLeft = cfg.time + (boosters.time ? 10 : 0);
   patienceMult = boosters.slow ? 1.3 : 1;
   for (const b of ['time', 'heart', 'slow']) if (boosters[b] && save.inv[b] > 0) { save.inv[b]--; persist(); }
@@ -436,11 +442,83 @@ function startLevel(n) {
   cdT = 3.3; cdWord = '';
   nextSpawn = 0;
   lastTickSec = 99;
+  hideTutorial();
+  startTutorial(n);
   showOverlay(null);
   renderCoins();
   requestWakeLock();
 }
 function startRound(r) { startLevel(r); } // legacy alias
+
+// ------------------------- TUTORIAL (teach by playing, no walls of text) -------------------------
+// Levels 1-4 each show ONE contextual hint. It disappears the moment the
+// player performs the taught action (or after a timeout, so it never lingers).
+const TUTORIALS = {
+  1: { msg: '👆 Tap a food in the fridge to grab it',                       until: () => held != null },
+  2: { msg: '👆 With a food in hand, tap the right station (🔪 CHOP for veggies)', until: () => stations.some(s => s.busy) },
+  3: { msg: '👆 Finished food glows on the station — tap it to serve!',     until: () => (save.stats.served || 0) > tutServed },
+  4: { msg: '⚡ Fresh Bonus! Serve finished food right away!',                 until: () => (save.stats.freshServes || 0) > tutFresh },
+};
+let tutTimer = 0, tutServed = 0, tutFresh = 0;
+function startTutorial(n) {
+  if (!tutorialEl || n > 4 || (save.tut || 0) >= n) return;
+  const t = TUTORIALS[n];
+  if (!t) return;
+  tutServed = save.stats.served || 0;
+  tutFresh = save.stats.freshServes || 0;
+  tutorialEl.textContent = t.msg;
+  tutorialEl.hidden = false;
+  tutTimer = 14; // auto-dismiss fallback
+}
+function updateTutorial(dt) {
+  if (!tutorialEl || tutorialEl.hidden) return;
+  const t = TUTORIALS[level];
+  if (!t) { tutorialEl.hidden = true; return; }
+  tutTimer -= dt;
+  if (tutTimer <= 0 || t.until()) {
+    tutorialEl.hidden = true;
+    if (level > (save.tut || 0)) { save.tut = level; persist(); }
+  }
+}
+function hideTutorial() { if (tutorialEl) tutorialEl.hidden = true; }
+
+// ------------------------- AMBIENT (menu life: steam + floating dust) -------------------------
+// Tiny drifting motes + soft steam puffs drawn on the canvas behind the home
+// overlay — the kitchen visibly steams and shimmers while the player is in menus.
+let ambPuffs = [], ambDust = [];
+function updateAmbient(dt) {
+  if (state !== 'title') { ambPuffs = []; ambDust = []; return; }
+  if (ambPuffs.length < 5 && Math.random() < dt * 2.2) {
+    ambPuffs.push({ x: rand(L.W * .12, L.W * .88), y: L.H + 14, r: rand(16, 34), vx: rand(-8, 8), vy: rand(-40, -22), a: rand(.05, .11), t: 0, life: rand(4, 6.5) });
+  }
+  for (const p of ambPuffs) { p.x += p.vx * dt; p.y += p.vy * dt; p.t += dt; }
+  ambPuffs = ambPuffs.filter(p => p.t < p.life);
+  if (ambDust.length < 14 && Math.random() < dt * 3) {
+    ambDust.push({ x: rand(0, L.W), y: rand(0, L.H), r: rand(1, 2.4), vx: rand(-10, 10), vy: rand(-16, -6), a: rand(.05, .15), t: 0, life: rand(5, 9) });
+  }
+  for (const p of ambDust) { p.x += p.vx * dt; p.y += p.vy * dt; p.t += dt; }
+  ambDust = ambDust.filter(p => p.t < p.life);
+}
+function drawAmbient() {
+  if (state !== 'title' || !ambDust.length && !ambPuffs.length) return;
+  const t = performance.now() / 1000;
+  for (const p of ambDust) {
+    ctx.globalAlpha = p.a * (1 - p.t / p.life) * (0.7 + 0.3 * Math.sin(t * 3 + p.x));
+    ctx.fillStyle = '#fff7ea';
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+  }
+  for (const p of ambPuffs) {
+    const k = p.t / p.life;
+    ctx.globalAlpha = p.a * (1 - k) * (0.6 + 0.4 * Math.sin(t * 2 + p.x));
+    const pr = p.r * (1 + k * 1.6);
+    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, pr);
+    g.addColorStop(0, 'rgba(255,255,255,.9)');
+    g.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = g;
+    ctx.beginPath(); ctx.arc(p.x, p.y, pr, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
 
 function spawnOrder() {
   const cfg = LEVELS[level - 1];
@@ -515,6 +593,7 @@ function completeOrder(o) {
 function expireOrder(o) {
   o.state = 'expired'; o.t = 0;
   hearts--; combo = 0;
+  heartPopT = 0.5;
   const idx = orders.indexOf(o);
   const cx = L.ORDER_X + L.ORDER_W / 2, cy = L.ORDER_Y0 + idx * (L.ORDER_H + L.ORDER_GAP) + 40;
   burst(cx, cy, ['#666', '#999', '#444'], 14, 180);
@@ -533,6 +612,7 @@ function rankFor(sc) {
 }
 
 function showResults(success, stars = 0, coinsEarned = 0) {
+  hideTutorial();
   if (success) {
     const b = best.get();
     if (score > b) best.set(score);
@@ -721,6 +801,10 @@ function update(dt) {
   for (const f of floaters) { f.t += dt; f.y -= 34 * dt; }
   floaters = floaters.filter(f => f.t < f.life);
   if (shakeT > 0) shakeT -= dt;
+  if (heartPopT > 0) heartPopT -= dt;
+
+  // menu ambience: steam + dust keep the kitchen alive behind the home screen
+  updateAmbient(dt);
 
   // keep clearing finished tickets even after game over
   if (state === 'gameOver') {
@@ -782,6 +866,7 @@ function update(dt) {
   }
 
   updateStations(dt);
+  updateTutorial(dt);
 }
 
 // ------------------------- RENDER -------------------------
@@ -790,7 +875,14 @@ function drawBackground() {
   if (bg) {
     const s = Math.max(L.W / bg.width, L.H / bg.height);
     const dw = bg.width * s, dh = bg.height * s;
-    ctx.drawImage(bg, (L.W - dw) / 2, (L.H - dh) / 2, dw, dh);
+    // subtle parallax on the menu: the kitchen leans gently toward the cursor
+    let ox = 0, oy = 0;
+    if (state === 'title') {
+      const mdx = Math.max(0, (dw - L.W) / 2), mdy = Math.max(0, (dh - L.H) / 2);
+      ox = clamp((mouse.x - L.W / 2) * .03, -mdx, mdx);
+      oy = clamp((mouse.y - L.H / 2) * .02, -mdy, mdy);
+    }
+    ctx.drawImage(bg, (L.W - dw) / 2 - ox, (L.H - dh) / 2 - oy, dw, dh);
     // theme tint so the HUD/panels stay readable and the kitchen matches the player's theme
     ctx.fillStyle = THEMES[save.theme].tint;
     ctx.fillRect(0, 0, L.W, L.H);
@@ -822,18 +914,29 @@ function drawHUD() {
   text('LEVEL ' + level + '/' + LEVELS.length, 20, 22, 13, '#a5712f', 'left', 600);
   text('SCORE ' + score, 20, 44, 22, accent, 'left');
   if (combo >= 2) text('🔥 ×' + combo, 132, 44, 18, '#e2574c', 'left');
-  // timer
+  // timer — the most important resource, so it dominates the HUD
   const t = Math.max(0, timeLeft);
   const low = t <= 5;
   ctx.save();
-  rr(L.W / 2 - 62, 8, 124, 40, 20);
+  rr(L.W / 2 - 71, 7, 142, 46, 23);
   ctx.fillStyle = low ? (Math.floor(t * 4) % 2 ? '#c0392b' : '#e2574c') : accent;
   ctx.fill();
-  text(Math.ceil(t) + '', L.W / 2, 29, 26, '#fff');
+  text(Math.ceil(t) + '', L.W / 2, 31, 30, '#fff');
   ctx.restore();
-  // hearts
+  // hearts — pop + shine whenever health changes
   const hs = '❤️'.repeat(Math.max(0, hearts)) + '🖤'.repeat(Math.max(0, 3 - Math.max(0, hearts)));
+  ctx.save();
+  if (heartPopT > 0) {
+    const p = heartPopT / 0.5;
+    const s = 1 + Math.sin((0.5 - p) * Math.PI) * 0.45;
+    ctx.translate(L.W - 60, 30);
+    ctx.scale(s, s);
+    ctx.translate(-(L.W - 60), -30);
+    ctx.shadowColor = '#fff';
+    ctx.shadowBlur = 18 * p;
+  }
   text(hs, L.W - 18, 30, 24, '#fff', 'right');
+  ctx.restore();
   // next star goal
   if (state === 'playing') {
     const cfg = LEVELS[level - 1];
@@ -1120,13 +1223,55 @@ function drawStation(s, x, y) {
     const dimg = doneKey ? IMG[doneKey] : null;
     if (dimg) ctx.drawImage(dimg, cx - 28 * k, cy - 28 * k, 56 * k, 56 * k);
     else drawIng(s.item, 56 * k);
+    if (!s.burning) {
+      // twinkle sparkles — the dish is ready to grab
+      for (let i = 0; i < 3; i++) {
+        const sa = t * 2.2 + i * 2.1;
+        const sr = 46 * k * pulse;
+        const sx = cx + Math.cos(sa) * sr, sy = cy + Math.sin(sa * 1.3) * sr * .55;
+        const tw = Math.max(0, Math.sin(t * 6 + i * 2));
+        ctx.save();
+        ctx.globalAlpha = tw * .9;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.moveTo(sx, sy - 5 * k); ctx.lineTo(sx + 1.6 * k, sy - 1.6 * k); ctx.lineTo(sx + 5 * k, sy);
+        ctx.lineTo(sx + 1.6 * k, sy + 1.6 * k); ctx.lineTo(sx, sy + 5 * k);
+        ctx.lineTo(sx - 1.6 * k, sy + 1.6 * k); ctx.lineTo(sx - 5 * k, sy);
+        ctx.lineTo(sx - 1.6 * k, sy - 1.6 * k); ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+    }
   } else {
-    // idle bob
+    // idle bob + gentle life: the cook station steams, the blender wobbles
     const bob = Math.sin(performance.now() / 500 + x) * 4;
     const icon = Math.min(88 * k, w - 64);
     const iimg = IMG[s.id];
-    if (iimg) ctx.drawImage(iimg, x + (w - icon) / 2, y + 122 * k - icon / 2 + bob, icon, icon);
-    else text(def.emoji, x + w / 2, y + 118 * k + bob, 54 * k);
+    const cx0 = x + w / 2, cy0 = y + 122 * k + bob;
+    const tt = performance.now() / 1000;
+    ctx.save();
+    if (s.id === 'blend') {
+      // slow idle wobble that swells and fades on a long cycle
+      ctx.translate(cx0, cy0);
+      ctx.rotate(Math.sin(tt * 1.2) * .05 * Math.max(0, Math.sin(tt * .35)));
+      ctx.translate(-cx0, -cy0);
+    }
+    if (iimg) ctx.drawImage(iimg, cx0 - icon / 2, cy0 - icon / 2, icon, icon);
+    else text(def.emoji, cx0, cy0, 54 * k);
+    ctx.restore();
+    if (s.id === 'cook') {
+      // lazy steam wisps rising off the stove
+      for (let i = 0; i < 2; i++) {
+        const ph = (tt * .5 + i * .5) % 1;
+        const sy = y + 118 * k - ph * 46 * k;
+        const sx = cx0 + Math.sin(tt * 1.3 + i * 3) * 9 * k;
+        ctx.save();
+        ctx.globalAlpha = (1 - ph) * .15;
+        ctx.fillStyle = '#fff';
+        ctx.beginPath(); ctx.arc(sx, sy, 8 * k * (1 + ph), 0, Math.PI * 2); ctx.fill();
+        ctx.restore();
+      }
+    }
   }
   text(s.busy ? 'Working…' : s.ready ? 'SERVE ME!' : 'Ready', x + w / 2, y + h - 22 * k, 14 * Math.min(k, 1), s.ready ? (s.burning ? '#e2574c' : '#6fbf57') : pal[1], 'center', 600);
   ctx.restore();
@@ -1155,15 +1300,17 @@ function drawFridge() {
     const col = i % L.CELLS, row = (i / L.CELLS) | 0;
     const cx = x + 14 + col * (L.CELL_W + L.CELL_GAP);
     const cy = y + 42 + row * (L.CELL_H + 12);
+    const isHeld = held === id;
     const pulse = needed.has(id) ? 1 + Math.sin(now / 240) * .05 : 1;
+    const heldPop = isHeld ? 1.06 + Math.sin(now / 170) * .02 : 1;
     ctx.save();
     rr(cx, cy, L.CELL_W, L.CELL_H, 12);
     ctx.fillStyle = '#ffffff';
     ctx.fill();
-    ctx.lineWidth = needed.has(id) ? 3 : 1.5;
-    ctx.strokeStyle = needed.has(id) ? '#6fbf57' : '#d8e4ee';
+    ctx.lineWidth = isHeld ? 4 : needed.has(id) ? 3 : 1.5;
+    ctx.strokeStyle = isHeld ? '#f2b134' : needed.has(id) ? '#6fbf57' : '#d8e4ee';
     ctx.stroke();
-    if (needed.has(id)) {
+    if (needed.has(id) && !isHeld) {
       ctx.save();
       rr(cx, cy, L.CELL_W, L.CELL_H, 12);
       ctx.strokeStyle = `rgba(111,191,87,${.35 + Math.sin(now / 240) * .2})`;
@@ -1171,13 +1318,21 @@ function drawFridge() {
       ctx.stroke();
       ctx.restore();
     }
+    if (isHeld) {
+      ctx.save();
+      rr(cx, cy, L.CELL_W, L.CELL_H, 12);
+      ctx.strokeStyle = `rgba(242,177,52,${.5 + Math.sin(now / 170) * .25})`;
+      ctx.lineWidth = 6;
+      ctx.stroke();
+      ctx.restore();
+    }
     ctx.translate(cx + L.CELL_W / 2, cy + L.CELL_H / 2);
-    ctx.scale(pulse, pulse);
+    ctx.scale(pulse * heldPop, pulse * heldPop);
     const cimg = IMG[id];
     if (cimg) ctx.drawImage(cimg, -37, -47, 74, 74);
     else text(INGREDIENTS[id].emoji, 0, -9, 42);
     ctx.restore();
-    text(INGREDIENTS[id].name, cx + L.CELL_W / 2, cy + L.CELL_H - 13, 12, '#3d5d80', 'center', 600);
+    text(INGREDIENTS[id].name, cx + L.CELL_W / 2, cy + L.CELL_H - 13, 12, isHeld ? '#c9822a' : '#3d5d80', 'center', 600);
   });
   ctx.restore();
 }
@@ -1238,6 +1393,7 @@ function render() {
     ctx.translate((Math.random() - .5) * shakeMag, (Math.random() - .5) * shakeMag);
   }
   drawBackground();
+  drawAmbient();
   drawHUD();
 
   // stations
@@ -1365,6 +1521,11 @@ function handleClick(x, y) {
 }
 
 canvas.addEventListener('pointermove', e => { mouse = canvasPos(e); });
+// window-level move so the menu parallax still tracks the cursor over overlays
+window.addEventListener('pointermove', e => {
+  const rect = stage.getBoundingClientRect();
+  mouse = { x: (e.clientX - rect.left) * (L.W / rect.width), y: (e.clientY - rect.top) * (L.H / rect.height) };
+});
 canvas.addEventListener('pointerdown', e => {
   e.preventDefault();
   ensureAudio();
@@ -1416,13 +1577,14 @@ function showOverlay(id) {
   renderCoins();
   renderDaily();
   buildAch();
-  bestScoreEl.textContent = best.get();
+  renderHome();
 }
 
 function togglePause() {
   if (state !== 'playing') return;
   paused = !paused;
   if (paused) {
+    hideTutorial();
     pauseInfoEl.textContent = 'Level ' + level + ' — ' + LEVELS[level - 1].name;
     showOverlay('pause');
   } else {
@@ -1458,8 +1620,19 @@ document.addEventListener('visibilitychange', () => {
 function buzzPhone(pattern) {
   try { if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate(pattern); } catch (e) { /* no haptics */ }
 }
+function coinPop(el) {
+  if (!el || el._popBusy) return;
+  el._popBusy = true;
+  el.classList.remove('pop');
+  void el.offsetWidth; // restart the animation
+  el.classList.add('pop');
+  setTimeout(() => { el.classList.remove('pop'); el._popBusy = false; }, 400);
+}
 function renderCoins() {
   const c = '' + save.coins;
+  if (homeCoinsEl.textContent !== c) coinPop(homeCoinsEl.parentElement);
+  if (levelsCoinsEl.textContent !== c) coinPop(levelsCoinsEl.parentElement);
+  if (shopCoinsEl.textContent !== c) coinPop(shopCoinsEl.parentElement);
   homeCoinsEl.textContent = c;
   levelsCoinsEl.textContent = c;
   shopCoinsEl.textContent = c;
@@ -1484,7 +1657,37 @@ function renderDaily() {
   if (!dailyBtn) return;
   const claimed = save.lastDaily === todayStr();
   dailyBtn.disabled = claimed;
-  dailyBtn.textContent = claimed ? '✅ Claimed — come back tomorrow!' : `🎁 DAILY REWARD +${dailyAmount()}`;
+  dailyIcoEl.textContent = claimed ? '✅' : '🎁';
+  dailyLabelEl.textContent = claimed ? 'Claimed' : '+' + dailyAmount();
+  const st = save.dailyStreak || 0;
+  dailyStreakEl.textContent = st > 0 ? '🔥' + st : '';
+  dailyBtn.title = claimed ? 'Claimed — come back tomorrow!' : 'Claim your daily reward!';
+}
+
+// home screen: welcome line, continue button, progress cards, today's special
+const SPECIALS = [
+  { dish: '🍜 Spicy Udon',      promo: '2× Coin Event' },
+  { dish: '🍔 Double Burger',   promo: '2× Combo Points' },
+  { dish: '🥤 Smoothie Hour',   promo: 'Fresh Bonus ×2' },
+  { dish: '🍲 Hearty Soup',     promo: 'Extra Patience' },
+  { dish: '🥗 Garden Fresh',    promo: '3× Serve Bonus' },
+];
+function renderHome() {
+  const hasProgress = save.unlocked > 1 || Object.keys(save.stars || {}).length > 0;
+  continueBtn.hidden = !hasProgress;
+  if (hasProgress) {
+    continueBtn.textContent = 'Continue · Level ' + save.unlocked;
+    welcomeLineEl.textContent = 'Welcome Back, Chef!';
+  } else {
+    welcomeLineEl.textContent = 'Welcome, Chef!';
+  }
+  let totalStars = 0;
+  for (const k in (save.stars || {})) totalStars += save.stars[k];
+  homeLevelEl.textContent = save.unlocked;
+  homeStarsEl.textContent = totalStars;
+  const s = SPECIALS[new Date().getDate() % SPECIALS.length];
+  specialCardEl.textContent = `Today's Special · ${s.dish} — ${s.promo}`;
+  bestScoreEl.textContent = best.get();
 }
 function dailyReward() {
   if (save.lastDaily === todayStr()) { SFX.buzz(); return 0; }
@@ -1494,6 +1697,7 @@ function dailyReward() {
   save.lastDaily = todayStr();
   persist();
   SFX.serve();
+  coinPop(dailyBtn);
   renderDaily();
   renderCoins();
   buildAch();
@@ -1501,32 +1705,45 @@ function dailyReward() {
 }
 
 // ------------------------- ACHIEVEMENTS -------------------------
+// cur()/goal() power the progress bars on locked cards (0 → locked, filled → claimable)
 const ACHIEVEMENTS = [
-  { id: 'first_serve',  emoji: '🍽️', name: 'First Serve',       desc: 'Serve your very first dish',          reward: 25,  cond: () => (save.stats.served || 0) >= 1 },
-  { id: 'serve_25',     emoji: '🍛', name: 'Busy Bee',           desc: 'Serve 25 dishes',                     reward: 50,  cond: () => (save.stats.served || 0) >= 25 },
-  { id: 'serve_100',    emoji: '👑', name: 'Service Legend',     desc: 'Serve 100 dishes',                    reward: 150, cond: () => (save.stats.served || 0) >= 100 },
-  { id: 'combo5',       emoji: '🔥', name: 'On Fire',            desc: 'Reach a ×5 combo',                    reward: 75,  cond: () => (save.stats.maxCombo || 0) >= 5 },
-  { id: 'combo10',      emoji: '🌋', name: 'Unstoppable',        desc: 'Reach a ×10 combo',                   reward: 200, cond: () => (save.stats.maxCombo || 0) >= 10 },
-  { id: 'star3',        emoji: '⭐', name: 'Three Stars!',       desc: 'Earn 3 stars on any level',           reward: 50,  cond: () => (save.stats.star3s || 0) >= 1 },
-  { id: 'perfect',      emoji: '💖', name: 'Flawless Shift',     desc: 'Finish a level with all hearts',      reward: 100, cond: () => (save.stats.perfects || 0) >= 1 },
-  { id: 'no_burn',      emoji: '🧯', name: 'Fire Marshal',       desc: 'Serve 10 dishes without burning any', reward: 75,  cond: () => (save.stats.served || 0) >= 10 && !save.stats.burned },
-  { id: 'themed',       emoji: '🎨', name: 'Interior Decorator', desc: 'Own all 3 kitchen themes',            reward: 100, cond: () => save.themesOwned.length >= 3 },
-  { id: 'rich',         emoji: '💰', name: 'Well Funded',        desc: 'Hold 500 coins at once',              reward: 150, cond: () => save.coins >= 500 },
-  { id: 'all_levels',   emoji: '🗺️', name: 'Full Menu',          desc: 'Unlock level 15',                     reward: 300, cond: () => save.unlocked >= 15 },
+  { id: 'first_serve',  emoji: '🍽️', name: 'First Serve',       desc: 'Serve your very first dish',          reward: 25,  cur: () => save.stats.served || 0,    goal: () => 1 },
+  { id: 'serve_25',     emoji: '🍛', name: 'Busy Bee',           desc: 'Serve 25 dishes',                     reward: 50,  cur: () => save.stats.served || 0,    goal: () => 25 },
+  { id: 'serve_100',    emoji: '👑', name: 'Service Legend',     desc: 'Serve 100 dishes',                    reward: 150, cur: () => save.stats.served || 0,    goal: () => 100 },
+  { id: 'combo5',       emoji: '🔥', name: 'On Fire',            desc: 'Reach a ×5 combo',                    reward: 75,  cur: () => save.stats.maxCombo || 0,  goal: () => 5 },
+  { id: 'combo10',      emoji: '🌋', name: 'Unstoppable',        desc: 'Reach a ×10 combo',                   reward: 200, cur: () => save.stats.maxCombo || 0,  goal: () => 10 },
+  { id: 'star3',        emoji: '⭐', name: 'Three Stars!',       desc: 'Earn 3 stars on any level',           reward: 50,  cur: () => save.stats.star3s || 0,    goal: () => 1 },
+  { id: 'perfect',      emoji: '💖', name: 'Flawless Shift',     desc: 'Finish a level with all hearts',      reward: 100, cur: () => save.stats.perfects || 0,  goal: () => 1 },
+  { id: 'no_burn',      emoji: '🧯', name: 'Fire Marshal',       desc: 'Serve 10 dishes without burning any', reward: 75,  cur: () => Math.min(save.stats.served || 0, 10), goal: () => 10, cond: () => (save.stats.served || 0) >= 10 && !save.stats.burned },
+  { id: 'themed',       emoji: '🎨', name: 'Interior Decorator', desc: 'Own all 3 kitchen themes',            reward: 100, cur: () => save.themesOwned.length,    goal: () => 3 },
+  { id: 'rich',         emoji: '💰', name: 'Well Funded',        desc: 'Hold 500 coins at once',              reward: 150, cur: () => Math.min(save.coins, 500),  goal: () => 500 },
+  { id: 'all_levels',   emoji: '🗺️', name: 'Full Menu',          desc: 'Unlock level 15',                     reward: 300, cur: () => Math.min(save.unlocked, 15), goal: () => 15 },
 ];
 function buildAch() {
   if (!achList) return;
   achList.innerHTML = '';
   for (const a of ACHIEVEMENTS) {
     const row = document.createElement('div');
-    row.className = 'ach-row' + (save.achClaimed.includes(a.id) ? ' done' : '');
-    const unlocked = a.cond();
     const claimed = save.achClaimed.includes(a.id);
-    let action;
-    if (claimed) action = '<span class="ach-status done">✓ CLAIMED</span>';
-    else if (unlocked) action = `<button class="btn small" data-id="${a.id}">CLAIM +${a.reward}</button>`;
-    else action = '<span class="ach-status locked">🔒</span>';
-    row.innerHTML = `<span class="ach-emoji">${a.emoji}</span><div class="ach-info"><b>${a.name}</b><span>${a.desc}</span><em>Reward: ${a.reward} 🪙</em></div>${action}`;
+    const unlocked = a.cond ? a.cond() : a.cur() >= a.goal();
+    row.className = 'ach-row' + (claimed ? ' done' : '');
+    let action, progress = '';
+    if (claimed) {
+      action = '<span class="ach-status done">✔ Claimed</span>';
+    } else if (unlocked) {
+      action = `<button class="btn small ach-claim" data-id="${a.id}">CLAIM +${a.reward} 🪙</button>`;
+    } else {
+      action = '<span class="ach-status locked">🔒</span>';
+      const cur = Math.min(a.cur(), a.goal());
+      const pct = Math.round(cur / a.goal() * 100);
+      progress = `<div class="ach-progress"><span>${cur} / ${a.goal()}</span><div class="ach-bar"><div class="ach-bar-fill" style="width:${pct}%"></div></div></div>`;
+    }
+    row.innerHTML = `
+      <div class="ach-main">
+        <div class="ach-head"><span class="ach-emoji">${a.emoji}</span><div class="ach-info"><b>${a.name}</b><span>${a.desc}</span></div></div>
+        ${progress}
+      </div>
+      <div class="ach-side"><span class="ach-reward">${a.reward} 🪙</span>${action}</div>`;
     const btn = row.querySelector('button');
     if (btn) btn.addEventListener('click', () => claimAch(a.id));
     achList.appendChild(row);
@@ -1534,7 +1751,8 @@ function buildAch() {
 }
 function claimAch(id) {
   const a = ACHIEVEMENTS.find(x => x.id === id);
-  if (!a || !a.cond() || save.achClaimed.includes(id)) { SFX.buzz(); return false; }
+  const unlocked = a && (a.cond ? a.cond() : a.cur() >= a.goal());
+  if (!a || !unlocked || save.achClaimed.includes(id)) { SFX.buzz(); return false; }
   save.achClaimed.push(id);
   save.coins += a.reward;
   persist();
@@ -1550,9 +1768,10 @@ function buildLevelGrid() {
     const unlocked = lv <= save.unlocked;
     const stars = save.stars[lv] || 0;
     const cfg = LEVELS[lv - 1];
+    const isCurrent = lv === save.unlocked;
     const b = document.createElement('button');
-    b.className = 'level-btn' + (unlocked ? '' : ' locked');
-    b.innerHTML = `<span class="lv-num">${lv}</span><span class="lv-dish">${unlocked ? RECIPES[cfg.recipes[0]].emoji : '🔒'}</span><span class="lv-name">${cfg.name}</span><span class="lv-stars">${'⭐'.repeat(stars)}${'☆'.repeat(3 - stars)}</span>`;
+    b.className = 'level-btn' + (unlocked ? '' : ' locked') + (isCurrent ? ' current' : '');
+    b.innerHTML = `<span class="lv-num">${lv}</span><span class="lv-dish">${unlocked ? RECIPES[cfg.recipes[0]].emoji : '🔒'}</span><span class="lv-name">${cfg.name}</span><span class="lv-stars">${'⭐'.repeat(stars)}${'☆'.repeat(3 - stars)}</span>${isCurrent ? '<span class="lv-current">CURRENT</span>' : ''}`;
     b.disabled = !unlocked;
     if (unlocked) b.addEventListener('click', () => { ensureAudio(); startMusic(); startLevel(lv); });
     grid.appendChild(b);
@@ -1563,19 +1782,23 @@ function buildShop() {
   list.innerHTML = '';
   for (const it of SHOP_ITEMS) {
     const row = document.createElement('div');
-    row.className = 'shop-item';
     let action;
     if (it.type === 'booster') {
       const qty = save.inv[it.id] || 0;
-      action = `<button class="btn small" data-id="${it.id}">BUY · ${it.price}<img src="assets/sorceress/ui/coin.png" alt="" class="coin-mini"></button>`;
-      row.innerHTML = `<img src="${it.icon}" alt="" class="si-icon" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'"><span class="si-emoji">${it.emoji}</span><div class="si-info"><b>${it.name}</b><span>${it.desc}</span><em>Owned: ×${qty}</em></div>${action}`;
+      row.className = 'shop-item';
+      action = `<button class="btn small shop-buy" data-id="${it.id}">BUY <img src="assets/sorceress/ui/coin.png" alt="" class="coin-mini">${it.price}</button>`;
+      row.innerHTML = `<img src="${it.icon}" alt="" class="si-icon" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'"><span class="si-emoji">${it.emoji}</span><div class="si-info"><b>${it.name}</b><span>${it.desc}</span></div><div class="si-side">${qty > 0 ? `<span class="si-owned">✔ ×${qty}</span>` : ''}${action}</div>`;
     } else {
       const owned = save.themesOwned.includes(it.id);
       const equipped = save.theme === it.id;
-      if (equipped) action = `<button class="btn small" disabled>✓ EQUIPPED</button>`;
+      row.className = 'shop-item theme';
+      if (equipped) action = `<button class="btn small alt2" disabled>✓ Equipped</button>`;
       else if (owned) action = `<button class="btn small alt2" data-id="${it.id}">USE THEME</button>`;
-      else action = `<button class="btn small" data-id="${it.id}">BUY · ${it.price}<img src="assets/sorceress/ui/coin.png" alt="" class="coin-mini"></button>`;
-      row.innerHTML = `<img src="${it.icon}" alt="" class="si-icon" onerror="this.style.display='none';this.nextElementSibling.style.display='inline'"><span class="si-emoji">${it.emoji}</span><div class="si-info"><b>${it.name}</b><span>${it.desc}</span><em>${equipped ? 'Currently equipped' : owned ? 'Owned' : 'Theme'}</em></div>${action}`;
+      else action = `<button class="btn small shop-buy" data-id="${it.id}">BUY <img src="assets/sorceress/ui/coin.png" alt="" class="coin-mini">${it.price}</button>`;
+      row.innerHTML = `
+        <div class="si-theme"><img src="${it.icon}" alt="" onerror="this.style.display='none';this.nextElementSibling.style.display='block'"><span class="si-emoji">${it.emoji}</span></div>
+        <div class="si-info"><b>${it.name}</b><span>${it.desc}</span></div>
+        <div class="si-side">${owned && !equipped ? '<span class="si-owned">✔ Owned</span>' : ''}${action}</div>`;
     }
     const btn = row.querySelector('button');
     if (btn && !btn.disabled) {
@@ -1597,7 +1820,7 @@ function renderBoosterStrip() {
     const qty = save.inv[b] || 0;
     const chip = document.createElement('button');
     chip.className = 'booster-chip' + (boosters[b] ? ' on' : '') + (qty <= 0 ? ' empty' : '');
-    chip.innerHTML = `<img src="${it.icon}" alt="" onerror="this.style.display='none'"><span>${it.emoji} ${it.name}</span><b>×${qty}</b>`;
+    chip.innerHTML = `<img src="${it.icon}" alt="" onerror="this.style.display='none'"><span class="bc-name">${it.name}</span><b>×${qty}</b>`;
     chip.disabled = qty <= 0;
     chip.addEventListener('click', () => { if ((save.inv[b] || 0) > 0) { boosters[b] = !boosters[b]; SFX.pick(); renderBoosterStrip(); } });
     strip.appendChild(chip);
@@ -1606,7 +1829,11 @@ function renderBoosterStrip() {
 function openLevels() { buildLevelGrid(); renderBoosterStrip(); renderCoins(); showOverlay('levels'); }
 function openShop() { buildShop(); renderCoins(); showOverlay('shop'); }
 
-$('homePlayBtn').addEventListener('click', () => { ensureAudio(); startMusic(); openLevels(); });
+// PLAY / Continue jump straight into the next level — players came to cook.
+// Level Select stays available for replaying / picking any unlocked level.
+function playNow() { ensureAudio(); startMusic(); startLevel(Math.min(save.unlocked, LEVELS.length)); }
+$('homePlayBtn').addEventListener('click', playNow);
+$('continueBtn').addEventListener('click', playNow);
 $('homeLevelsBtn').addEventListener('click', () => { ensureAudio(); startMusic(); openLevels(); });
 $('homeShopBtn').addEventListener('click', () => { ensureAudio(); startMusic(); openShop(); });
 $('levelsBackBtn').addEventListener('click', () => showOverlay('home'));
@@ -1616,7 +1843,7 @@ $('nextBtn').addEventListener('click', () => { ensureAudio(); startMusic(); star
 $('homeBtn').addEventListener('click', () => { showOverlay('home'); });
 
 // ------------------------- LOOP -------------------------
-bestScoreEl.textContent = best.get();
+renderHome();
 let last = performance.now();
 function loop(now) {
   const dt = Math.min((now - last) / 1000, 0.05);

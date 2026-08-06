@@ -184,48 +184,33 @@ h1 { font-size: clamp(30px, 5vw, 46px); text-shadow: 0 4px 0 rgba(0,0,0,.35); }
 @keyframes starPop { from { transform: scale(0) rotate(-40deg) } to { transform: scale(1) rotate(0) } }
 .rank { font-size: 26px; font-weight: 600; color: #b8f0c9; }
 
-#settingsBtn {
+/* ---- TOP-RIGHT controls group: Pause + Settings (equal spacing, 8px grid) ---- */
+#settingsBtn, #pauseBtn {
   position: absolute;
-  top: max(10px, env(safe-area-inset-top));
-  right: max(12px, env(safe-area-inset-right));
-  width: 42px;
-  height: 42px;
+  top: max(16px, env(safe-area-inset-top));
+  width: 48px;
+  height: 48px;
   display: flex;
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 12px;
+  border-radius: 14px;
   background: rgba(0,0,0,.35);
   color: #fff;
   cursor: pointer;
   z-index: 10;
   pointer-events: auto;
-  min-width: 44px;
-  min-height: 44px;
+  transition: transform .16s ease, box-shadow .16s ease, background .16s ease;
 }
-#settingsBtn:hover { background: rgba(0,0,0,.5); }
-#settingsBtn .ico, #pauseBtn .ico { width: 22px; height: 22px; }
-
-#pauseBtn {
-  position: absolute;
-  top: max(10px, env(safe-area-inset-top));
-  right: calc(max(64px, env(safe-area-inset-right)) + 52px);
-  width: 42px;
-  height: 42px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: none;
-  border-radius: 12px;
-  background: rgba(0,0,0,.35);
-  color: #fff;
-  cursor: pointer;
-  z-index: 10;
-  pointer-events: auto;
-  min-width: 44px;
-  min-height: 44px;
+#settingsBtn { right: max(16px, env(safe-area-inset-right)); }
+#pauseBtn    { right: calc(max(16px, env(safe-area-inset-right)) + 64px); } /* 48px button + 16px gap */
+#settingsBtn:hover, #pauseBtn:hover {
+  background: rgba(0,0,0,.5);
+  transform: scale(1.05);
+  box-shadow: 0 6px 14px rgba(0,0,0,.35);
 }
-#pauseBtn:hover { background: rgba(0,0,0,.5); }
+#settingsBtn:active, #pauseBtn:active { transform: scale(.94); }
+#settingsBtn .hud-ico, #pauseBtn .hud-ico { width: 26px; height: 26px; display: block; }
 
 #rotateHint {
   position: absolute;
@@ -387,18 +372,21 @@ h1 { font-size: clamp(30px, 5vw, 46px); text-shadow: 0 4px 0 rgba(0,0,0,.35); }
 }
 
 /* button hierarchy: one loud primary, quieter secondary, flat tertiary */
+/* pure-CSS kawaii buttons: gradient body, dark outline, glossy highlight —
+   no image dependencies, render identically in every browser */
 .btn.primary {
   font-size: 27px;
   letter-spacing: 2px;
   padding: 15px 74px;
   color: #fff;
-  border: 20px solid transparent;
-  border-image: url('assets/sorceress/ui/btn-primary.png') 56 fill round;
-  border-radius: 0; /* border-image draws the corners — don't pill-clip them */
-  background: linear-gradient(180deg, #ff8a5c, #ef5b4c); /* fallback if border-image is unsupported */
-  box-shadow: 0 7px 0 #b03a2e, 0 14px 28px rgba(0,0,0,.35);
+  background: linear-gradient(180deg, #ff9a70 0%, #ef5b4c 52%, #d94a3d 100%);
+  border: 3px solid #4a2f1c;
+  border-radius: 26px;
+  box-shadow: 0 6px 0 #a93a2c, 0 14px 28px rgba(0,0,0,.35), inset 0 4px 0 rgba(255,255,255,.38), inset 0 -10px 0 rgba(0,0,0,.14);
+  text-shadow: 0 2px 0 rgba(0,0,0,.28);
   animation: playBreathe 2.2s ease-in-out infinite;
 }
+
 @keyframes playBreathe {
   0%, 100% { transform: scale(1); box-shadow: 0 7px 0 #b03a2e, 0 14px 28px rgba(0,0,0,.35); }
   50%      { transform: scale(1.035); box-shadow: 0 7px 0 #b03a2e, 0 18px 34px rgba(239,91,76,.5); }
@@ -409,12 +397,13 @@ h1 { font-size: clamp(30px, 5vw, 46px); text-shadow: 0 4px 0 rgba(0,0,0,.35); }
   font-size: 20px;
   padding: 11px 48px;
   color: #fff;
-  border: 18px solid transparent;
-  border-image: url('assets/sorceress/ui/btn-green.png') 56 fill round;
-  border-radius: 0;
-  background: linear-gradient(180deg, #7cbf63, #4c9e6a);
-  box-shadow: 0 5px 0 #33734a, 0 10px 20px rgba(0,0,0,.28);
+  background: linear-gradient(180deg, #8fd46a 0%, #4c9e6a 55%, #3e7a52 100%);
+  border: 3px solid #2f5a3c;
+  border-radius: 22px;
+  box-shadow: 0 5px 0 #2c6444, 0 10px 20px rgba(0,0,0,.28), inset 0 4px 0 rgba(255,255,255,.38), inset 0 -10px 0 rgba(0,0,0,.14);
+  text-shadow: 0 2px 0 rgba(0,0,0,.28);
 }
+
 .btn.secondary:active { box-shadow: 0 2px 0 #33734a; }
 
 .btn.tertiary {
@@ -470,12 +459,13 @@ h1 { font-size: clamp(30px, 5vw, 46px); text-shadow: 0 4px 0 rgba(0,0,0,.35); }
 }
 .btn.alt {
   color: #fff;
-  border: 18px solid transparent;
-  border-image: url('assets/sorceress/ui/btn-green.png') 56 fill round;
-  border-radius: 0;
-  background: linear-gradient(180deg, #7cbf63, #4c9e6a);
-  box-shadow: 0 6px 0 #33734a, 0 10px 20px rgba(0,0,0,.3);
+  background: linear-gradient(180deg, #8fd46a 0%, #4c9e6a 55%, #3e7a52 100%);
+  border: 3px solid #2f5a3c;
+  border-radius: 22px;
+  box-shadow: 0 6px 0 #2c6444, 0 10px 20px rgba(0,0,0,.3), inset 0 4px 0 rgba(255,255,255,.38), inset 0 -10px 0 rgba(0,0,0,.14);
+  text-shadow: 0 2px 0 rgba(0,0,0,.28);
 }
+
 .btn.alt:active { box-shadow: 0 3px 0 #33734a; }
 .btn.alt2 { background: linear-gradient(180deg, #7ec8ff, #42a5f5); box-shadow: 0 6px 0 #2a6da8, 0 10px 20px rgba(0,0,0,.3); }
 .btn.alt2:active { box-shadow: 0 3px 0 #2a6da8; }

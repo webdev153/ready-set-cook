@@ -41,9 +41,7 @@ const SKIP = new Set([
 for (const f of fs.readdirSync(path.join(ROOT, 'assets/sorceress/autosprite'))) {
   if (/\.mp4$|keyed-/.test(f)) SKIP.add('assets/sorceress/autosprite/' + f);
 }
-for (const f of fs.readdirSync(path.join(ROOT, 'assets/sorceress/anim'))) {
-  SKIP.add('assets/sorceress/anim/' + f);
-}
+// the legacy anim/ folder was deleted — keep the guard for old checkouts
 
 fs.rmSync(OUT, { recursive: true, force: true });
 fs.mkdirSync(OUT, { recursive: true });

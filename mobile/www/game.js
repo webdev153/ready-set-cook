@@ -204,19 +204,19 @@ function noise(dur, vol = 0.15, freq = 3000, delay = 0) {
   src.start(t0);
 }
 const SFX = {
-  pick()  { tone(600, .05, 'triangle', .2); tone(900, .07, 'triangle', .15, 1100, .03); },
-  plop()  { tone(340, .09, 'sine', .25, 520); },
-  chop()  { noise(.05, .22, 2500); noise(.05, .18, 3200, .09); },
-  cook()  { noise(1.2, .09, 1700); for (let i = 0; i < 6; i++) noise(.03, .1, 4200, i * .19); },
-  blend() { tone(72, 1.2, 'sawtooth', .07, 95); tone(145, 1.2, 'square', .035, 175); },
-  done()  { tone(700, .08, 'triangle', .2); tone(1050, .1, 'triangle', .15, 0, .07); },
+  pick()  { if (playMp3('pick')) return; tone(600, .05, 'triangle', .2); tone(900, .07, 'triangle', .15, 1100, .03); },
+  plop()  { if (playMp3('plop')) return; tone(340, .09, 'sine', .25, 520); },
+  chop()  { if (playMp3('chop')) return; noise(.05, .22, 2500); noise(.05, .18, 3200, .09); },
+  cook()  { if (playMp3('cook')) return; noise(1.2, .09, 1700); for (let i = 0; i < 6; i++) noise(.03, .1, 4200, i * .19); },
+  blend() { if (playMp3('blend')) return; tone(72, 1.2, 'sawtooth', .07, 95); tone(145, 1.2, 'square', .035, 175); },
+  done()  { if (playMp3('done')) return; tone(700, .08, 'triangle', .2); tone(1050, .1, 'triangle', .15, 0, .07); },
   serve() { if (playMp3('serve')) return; [523, 659, 784, 1047].forEach((f, i) => tone(f, .13, 'triangle', .22, 0, i * .07)); tone(1568, .22, 'sine', .12, 0, .3); },
   buzz()  { if (playMp3('buzz')) return; tone(150, .22, 'square', .14, 95); },
   heart() { if (playMp3('heart')) return; tone(300, .25, 'sawtooth', .14, 110); tone(200, .3, 'sawtooth', .12, 80, .15); },
-  tick()  { tone(950, .04, 'square', .09); },
-  beep()  { tone(440, .14, 'sine', .2); },
-  go()    { tone(523, .1, 'triangle', .22); tone(784, .18, 'triangle', .22, 0, .1); tone(1046, .38, 'triangle', .24, 0, .25); },
-  fanfare(){ [523, 659, 784].forEach((f, i) => tone(f, .3, 'triangle', .2, 0, i * .12)); [659, 784, 1046].forEach((f, i) => tone(f, .42, 'triangle', .2, 0, .5 + i * .13)); },
+  tick()  { if (playMp3('tick')) return; tone(950, .04, 'square', .09); },
+  beep()  { if (playMp3('beep')) return; tone(440, .14, 'sine', .2); },
+  go()    { if (playMp3('go')) return; tone(523, .1, 'triangle', .22); tone(784, .18, 'triangle', .22, 0, .1); tone(1046, .38, 'triangle', .24, 0, .25); },
+  fanfare(){ if (playMp3('fanfare')) return; [523, 659, 784].forEach((f, i) => tone(f, .3, 'triangle', .2, 0, i * .12)); [659, 784, 1046].forEach((f, i) => tone(f, .42, 'triangle', .2, 0, .5 + i * .13)); },
 };
 // Settings (gear): Music / Sound FX / Vibration toggles. Opened from menus or
 // mid-game (pauses the run first — back returns to the pause screen).
@@ -277,8 +277,10 @@ const ASSET = {
     'chop-carrot': 'assets/sorceress/sprites/chop-carrot.png',
     'cook-beef': 'assets/sorceress/sprites/cook-beef.png',
     'cook-egg': 'assets/sorceress/sprites/cook-egg.png',
+    'cook-water': 'assets/sorceress/sprites/cook-water.png',
     'blend-orange': 'assets/sorceress/sprites/blend-orange.png',
     'blend-apple': 'assets/sorceress/sprites/blend-apple.png',
+    'heart': 'assets/sorceress/ui/heart.png',
   },
   // ingredient → processed-result sprite key (whole raw sprite is the fallback)
   processed: {
@@ -289,6 +291,7 @@ const ASSET = {
     carrot: 'chop-carrot',
     beef: 'cook-beef',
     egg: 'cook-egg',
+    water: 'cook-water',
     orange: 'blend-orange',
     apple: 'blend-apple',
   },
@@ -299,6 +302,11 @@ const ASSET = {
     3: 'assets/sorceress/levels/bg-l3.png',
     4: 'assets/sorceress/levels/bg-l4.png',
     5: 'assets/sorceress/levels/bg-l5.png',
+    6: 'assets/sorceress/levels/bg-l6.png',
+    7: 'assets/sorceress/levels/bg-l7.png',
+    8: 'assets/sorceress/levels/bg-l8.png',
+    9: 'assets/sorceress/levels/bg-l9.png',
+    10: 'assets/sorceress/levels/bg-l10.png',
   },
   anims: {
     'anim-chop': 'assets/sorceress/autosprite/small/anim-chop.png',
@@ -317,21 +325,52 @@ const ASSET = {
     serve: 'assets/sorceress/audio/serve.mp3',
     buzz: 'assets/sorceress/audio/buzz.mp3',
     heart: 'assets/sorceress/audio/heart.mp3',
+    pick: 'assets/sorceress/audio/pick.mp3',
+    plop: 'assets/sorceress/audio/plop.mp3',
+    chop: 'assets/sorceress/audio/chop.mp3',
+    cook: 'assets/sorceress/audio/cook.mp3',
+    blend: 'assets/sorceress/audio/blend.mp3',
+    done: 'assets/sorceress/audio/done.mp3',
+    tick: 'assets/sorceress/audio/tick.mp3',
+    beep: 'assets/sorceress/audio/beep.mp3',
+    go: 'assets/sorceress/audio/go.mp3',
+    fanfare: 'assets/sorceress/audio/fanfare.mp3',
   },
 };
+// levels 11-15 reuse the night arc (avoids jumping back to the classic backdrop)
+for (let i = 11; i <= 15; i++) ASSET.bgs[i] = ASSET.bgs[6 + ((i - 11) % 5)];
 const IMG = {};
-function loadImg(key, src) {
+function loadImg(key, src, onload) {
   if (typeof Image === 'undefined') return;
   const im = new Image();
   im.decoding = 'async';      // don't block main thread while decoding
-  im.onload = () => { IMG[key] = im; };
+  im.onload = () => { IMG[key] = im; if (onload) onload(im); };
   im.src = src;
 }
 loadImg('bg', ASSET.bg);
-for (const k of Object.keys(ASSET.sprites)) loadImg(k, ASSET.sprites[k]);
+for (const k of Object.keys(ASSET.sprites)) loadImg(k, ASSET.sprites[k], k === 'heart' ? makeEmptyHeart : null);
 // anim sheets: only the two base action sheets eagerly; per-ingredient variants
 // (and fry/boil) lazy-load on first use in startStationProc — keeps startup light
 for (const k of ['anim-chop', 'anim-blend']) loadImg(k, ASSET.anims[k]);
+
+// the empty (lost-life) heart is the full heart desaturated — same art, same style
+function makeEmptyHeart(im) {
+  try {
+    const c = document.createElement('canvas');
+    c.width = im.width; c.height = im.height;
+    const cx = c.getContext('2d');
+    cx.drawImage(im, 0, 0);
+    const d = cx.getImageData(0, 0, c.width, c.height);
+    for (let i = 0; i < d.data.length; i += 4) {
+      const gr = Math.round(d.data[i] * .30 + d.data[i + 1] * .59 + d.data[i + 2] * .11);
+      d.data[i] = Math.min(255, Math.round(gr * .5 + 70));
+      d.data[i + 1] = d.data[i];
+      d.data[i + 2] = d.data[i];
+    }
+    cx.putImageData(d, 0, 0);
+    IMG['heart-empty'] = c;
+  } catch (e) { /* canvas unsupported — the HUD falls back to emoji hearts */ }
+}
 
 // AutoSprite keyed sheets: 8 cols x 6 rows of 240px frames, 46 valid frames, ~15 fps source
 const ANIM_META = { cols: 8, rows: 6, frames: 46, frame: 240, fps: 15 };
@@ -956,12 +995,30 @@ function drawBackground() {
 }
 
 function drawHUD() {
-  // score + level
+  // ---- LEFT group: player status (level, score + hearts on one line) ----
   const accent = THEMES[save.theme].accent;
-  text('LEVEL ' + level + '/' + LEVELS.length, 20, 22, 13, '#a5712f', 'left', 600);
-  text('SCORE ' + score, 20, 44, 22, accent, 'left');
-  if (combo >= 2) text('🔥 ×' + combo, 132, 44, 18, '#e2574c', 'left');
-  // timer — the most important resource, so it dominates the HUD
+  text('LEVEL ' + level + '/' + LEVELS.length, 24, 24, 13, '#a5712f', 'left', 600);
+  text('SCORE ' + score, 24, 48, 22, accent, 'left');
+  // hearts sit immediately right of the score, vertically aligned (16-24px gap)
+  const heartX = 24 + ctx.measureText('SCORE ' + score).width + 20;
+  ctx.save();
+  if (heartPopT > 0) {
+    const p = heartPopT / 0.5;
+    const s = 1 + Math.sin((0.5 - p) * Math.PI) * 0.45;
+    ctx.translate(heartX + 34, 48);
+    ctx.scale(s, s);
+    ctx.translate(-(heartX + 34), -48);
+    ctx.shadowColor = '#fff';
+    ctx.shadowBlur = 18 * p;
+  }
+  const HS = 22, HG = 6;
+  for (let i = 0; i < 3; i++) {
+    const img = i < hearts ? IMG.heart : IMG['heart-empty'];
+    if (img) ctx.drawImage(img, heartX + i * (HS + HG), 48 - HS / 2, HS, HS);
+    else text(i < hearts ? '❤️' : '🖤', heartX + i * (HS + HG) + HS / 2, 48, 22, '#fff', 'center');
+  }
+  ctx.restore();
+  // ---- CENTER: timer (primary resource — isolated focal point, unchanged) ----
   const t = Math.max(0, timeLeft);
   const low = t <= 5;
   ctx.save();
@@ -970,27 +1027,19 @@ function drawHUD() {
   ctx.fill();
   text(Math.ceil(t) + '', L.W / 2, 31, 30, '#fff');
   ctx.restore();
-  // hearts — pop + shine whenever health changes
-  const hs = '❤️'.repeat(Math.max(0, hearts)) + '🖤'.repeat(Math.max(0, 3 - Math.max(0, hearts)));
-  ctx.save();
-  if (heartPopT > 0) {
-    const p = heartPopT / 0.5;
-    const s = 1 + Math.sin((0.5 - p) * Math.PI) * 0.45;
-    ctx.translate(L.W - 60, 30);
-    ctx.scale(s, s);
-    ctx.translate(-(L.W - 60), -30);
-    ctx.shadowColor = '#fff';
-    ctx.shadowBlur = 18 * p;
-  }
-  text(hs, L.W - 18, 30, 24, '#fff', 'right');
-  ctx.restore();
-  // next star goal
+  // progress line: star goal + combo (score feedback stays in the left group
+  // but below, so it never crowds the timer on narrow layouts)
   if (state === 'playing') {
     const cfg = LEVELS[level - 1];
     const target = score < cfg.star1 ? cfg.star1 : score < cfg.star2 ? cfg.star2 : cfg.star3;
-    if (score < cfg.star3) text('⭐ ' + target, 20, 66, 11.5, '#a5712f', 'left', 600);
+    let cx = 24;
+    if (score < cfg.star3) {
+      text('⭐ ' + target, cx, 72, 11.5, '#a5712f', 'left', 600);
+      cx += ctx.measureText('⭐ ' + target).width + 20;
+    }
+    if (combo >= 2) text('🔥 ×' + combo, cx, 72, 14, '#e2574c', 'left');
   }
-  // secret dish hint
+  // secret dish hint stays top-right (gameplay info, not a control)
   if (secretRecipe && state === 'playing') {
     text('⭐ SECRET DISH: ' + RECIPES[secretRecipe].name, L.W - 18, 54, 13, '#8a5fd0', 'right', 600);
   }
